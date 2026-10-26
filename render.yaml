@@ -1,0 +1,27 @@
+# Render Blueprint: Render-də "New → Blueprint" ilə bu repo-nu seçin.
+# Baza Neon-dadır, DATABASE_URL-i Render panelində əl ilə yazın.
+services:
+  - type: web
+    name: stockflow-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ACCESS_TOKEN_TTL
+        value: 7d
+      # Sınaq mərhələsi: production-da memory anbar və console poçt qadağandır.
+      # R2 + Resend qoşulanda NODE_ENV=production, STORAGE_DRIVER=s3, MAIL_DRIVER=resend edin.
+      - key: NODE_ENV
+        value: development
+      - key: STORAGE_DRIVER
+        value: memory
+      - key: MAIL_DRIVER
+        value: console
+      - key: LOG_LEVEL
+        value: info
