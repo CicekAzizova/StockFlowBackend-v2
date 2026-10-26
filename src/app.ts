@@ -12,6 +12,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { z } from 'zod';
 import type { AppDeps } from './app-types.js';
 import type { AppConfig } from './config/env.js';
@@ -28,12 +29,22 @@ import { AppError } from './shared/errors.js';
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
+/** pino-pretty yalnız inkişaf asılılığıdır; serverdə quraşdırılmayıbsa JSON log istifadə olunur. */
+function hasPinoPretty(): boolean {
+  try {
+    createRequire(import.meta.url).resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function loggerOptions(config: AppConfig) {
   if (config.env === 'test') return false;
   return {
     level: config.logLevel,
     redact: ['req.headers.authorization', 'req.headers.cookie'],
-    ...(config.env === 'development'
+    ...(config.env === 'development' && hasPinoPretty()
       ? {
           transport: {
             target: 'pino-pretty',
