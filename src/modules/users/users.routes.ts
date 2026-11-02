@@ -41,6 +41,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: {
         tags: ['Profile'],
         summary: 'Edit own name, surname, phone or language',
+        description: 'Sales associates may only change the language.',
         security: secured,
         body: updateMeBody,
         response: { 200: userDtoSchema },
@@ -88,13 +89,15 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   app.delete(
     '/me',
     {
+      onRequest: [ownerOnly],
       config: { allowUnverified: true, rateLimit: { max: 5, timeWindow: '10 minutes' } },
       schema: {
         tags: ['Profile'],
-        summary: 'Delete the account permanently',
+        summary: 'Delete the owner account permanently',
         description:
-          'Required by the App Store. Owners lose all stores, products and sales. ' +
-          "Associates lose personal data; their past sales stay in the owner's history.",
+          'Owner only (required by the App Store). All stores, products, sales and sales ' +
+          'associates are deleted. Associates cannot delete themselves; the owner removes them ' +
+          'with DELETE /users/{id}.',
         security: secured,
         body: deleteAccountBody,
         response: { 200: messageResponse },

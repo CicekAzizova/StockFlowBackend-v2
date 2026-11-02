@@ -207,19 +207,6 @@ export function deactivate(db: Queryable, id: number): Promise<number> {
   );
 }
 
-/** İstifadəçinin öz hesabını silməsi: şəxsi məlumat silinir, satış tarixçəsi qalır. */
-export function anonymize(db: Queryable, id: number): Promise<number> {
-  return execute(
-    db,
-    `UPDATE users
-     SET deleted_at = now(), name = 'Deleted user', surname = '', phone = '', fin = NULL,
-         avatar_url = NULL, password_hash = '!', email = 'deleted-' || id || '@deleted.invalid',
-         updated_at = now()
-     WHERE id = $1`,
-    [id],
-  );
-}
-
 /** Sahibin hesabı: mağazalar, məhsullar, satışlar və satıcılar cascade ilə silinir. */
 export function deleteOwner(db: Queryable, id: number): Promise<number> {
   return execute(db, "DELETE FROM users WHERE id = $1 AND role = 'OWNER'", [id]);

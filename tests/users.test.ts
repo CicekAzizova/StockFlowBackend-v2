@@ -127,6 +127,20 @@ describe('team', () => {
   });
 });
 
+describe('associate profile limits', () => {
+  it('lets an associate change only the language', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+    expect((await http.patch('/users/me', { name: 'Hack' }, seller.token)).status).toBe(403);
+    expect((await http.patch('/users/me', { phone: '050 111 22 33' }, seller.token)).status).toBe(
+      403,
+    );
+    const ok = await http.patch('/users/me', { locale: 'en' }, seller.token);
+    expect(ok.status).toBe(200);
+    expect(ok.body.locale).toBe('en');
+  });
+});
+
 describe('account deletion', () => {
   it('requires the password', async () => {
     const owner = await registerOwner(ctx, { password: 'secret123' });
@@ -152,14 +166,21 @@ describe('account deletion', () => {
     await registerOwner(ctx, { email: 'bye@test.com' });
   });
 
-  it("anonymizes an associate but keeps the owner's sales history", async () => {
+  it('does not let an associate delete themselves', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner, { password: 'seller123' });
+    expect((await http.delete('/users/me', seller.token, { password: 'seller123' })).status).toBe(
+      403,
+    );
+    expect((await http.get('/users/me', seller.token)).status).toBe(200);
+  });
+
+  it("keeps the sales history when the owner removes an associate", async () => {
     const owner = await registerOwner(ctx);
     const seller = await createAssociate(ctx, owner, { password: 'seller123' });
     const p = await createProduct(ctx, owner, { quantity: 5 });
     await http.post('/sales', { product_id: p.id, quantity: 1 }, seller.token);
-    expect((await http.delete('/users/me', seller.token, { password: 'seller123' })).status).toBe(
-      200,
-    );
+    expect((await http.delete(`/users/${seller.id}`, owner.token)).status).toBe(200);
     expect((await http.get('/sales', owner.token)).body.total).toBe(1);
     expect(
       (await http.post('/auth/login', { email: seller.email, password: 'seller123' })).status,

@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { AppDeps, AuthContext } from '../../app-types.js';
 import { isUniqueViolation, queryMany, withTransaction } from '../../db/pool.js';
 import { keysForUrl, saveImage } from '../../infra/images.js';
-import { badRequest, conflict, notFound, unauthorized } from '../../shared/errors.js';
+import { badRequest, conflict, forbidden, notFound, unauthorized } from '../../shared/errors.js';
 import { requireStoreId } from '../../shared/auth-helpers.js';
 import * as authRepo from '../auth/auth.repository.js';
 import { hashPassword, verifyPassword } from '../auth/passwords.js';
@@ -52,7 +52,13 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
         locale?: 'az' | 'en' | 'ru' | undefined;
       },
     ) {
-      await requireUser(userId);
+      const user = await requireUser(userId);
+      if (
+        user.role === 'SALES_ASSOCIATE' &&
+        (body.name !== undefined || body.surname !== undefined || body.phone !== undefined)
+      ) {
+        throw forbidden('FORBIDDEN', 'Sales associates cannot edit their profile');
+      }
       await repo.updateUser(pool, userId, body);
       return toUserDto(await requireUser(userId), storage);
     },
@@ -73,43 +79,37 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
     },
 
     /**
-     * Hesabı silmək (App Store tələbi).
-     *  - sahib: mağazalar, məhsullar, satışlar və satıcılar bütövlükdə silinir
-     *  - satıcı: şəxsi məlumatı silinir, satış tarixçəsi sahibin hesabatı üçün qalır
+     * Sahibin hesabını silmək (App Store tələbi): mağazalar, məhsullar, satışlar və satıcılar
+     * bütövlükdə silinir. Satıcı özünü silə bilmir, bunu sahib edir (deleteAssociate).
      */
     async deleteAccount(userId: number, password: string): Promise<void> {
       const user = await requireUser(userId);
+      if (user.role !== 'OWNER') {
+        throw forbidden('FORBIDDEN', 'Only the owner can delete an account');
+      }
       if (!(await verifyPassword(user.password_hash, password))) {
         // 401 verilmir: iOS 401-i sessiya bitməsi kimi qəbul edir.
         throw badRequest('INVALID_PASSWORD', 'Password is incorrect');
       }
 
       const imageUrls: string[] = user.avatar_url ? [user.avatar_url] : [];
-
-      if (user.role === 'OWNER') {
-        const productImages = await queryMany<{ url: string }>(
-          pool,
-          `SELECT unnest(p.image_urls) AS url FROM products p
-           JOIN stores s ON s.id = p.store_id WHERE s.owner_id = $1`,
-          [userId],
-        );
-        const associateAvatars = await queryMany<{ url: string }>(
-          pool,
-          `SELECT u.avatar_url AS url FROM users u
-           JOIN stores s ON s.id = u.store_id
-           WHERE s.owner_id = $1 AND u.avatar_url IS NOT NULL`,
-          [userId],
-        );
-        imageUrls.push(...productImages.map((r) => r.url), ...associateAvatars.map((r) => r.url));
-        await withTransaction(pool, async (tx) => {
-          await repo.deleteOwner(tx, userId);
-        });
-      } else {
-        await withTransaction(pool, async (tx) => {
-          await authRepo.revokeAllForUser(tx, userId);
-          await repo.anonymize(tx, userId);
-        });
-      }
+      const productImages = await queryMany<{ url: string }>(
+        pool,
+        `SELECT unnest(p.image_urls) AS url FROM products p
+         JOIN stores s ON s.id = p.store_id WHERE s.owner_id = $1`,
+        [userId],
+      );
+      const associateAvatars = await queryMany<{ url: string }>(
+        pool,
+        `SELECT u.avatar_url AS url FROM users u
+         JOIN stores s ON s.id = u.store_id
+         WHERE s.owner_id = $1 AND u.avatar_url IS NOT NULL`,
+        [userId],
+      );
+      imageUrls.push(...productImages.map((r) => r.url), ...associateAvatars.map((r) => r.url));
+      await withTransaction(pool, async (tx) => {
+        await repo.deleteOwner(tx, userId);
+      });
       cleanup(imageUrls);
     },
 
