@@ -214,6 +214,26 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
       return this.getAssociate(auth, id);
     },
 
+    /** Deaktiv: giriş bağlanır və bütün cihazlar çıxarılır, amma hesab və satış tarixçəsi qalır. */
+    async deactivateAssociate(auth: AuthContext, id: number) {
+      const storeId = requireStoreId(auth);
+      const associate = await repo.findAssociate(pool, storeId, id);
+      if (!associate) throw notFound('ASSOCIATE_NOT_FOUND', 'Sales associate not found');
+      await withTransaction(pool, async (tx) => {
+        await repo.setActive(tx, id, false);
+        await authRepo.revokeAllForUser(tx, id);
+      });
+      return this.getAssociate(auth, id);
+    },
+
+    async activateAssociate(auth: AuthContext, id: number) {
+      const storeId = requireStoreId(auth);
+      const associate = await repo.findAssociate(pool, storeId, id);
+      if (!associate) throw notFound('ASSOCIATE_NOT_FOUND', 'Sales associate not found');
+      await repo.setActive(pool, id, true);
+      return this.getAssociate(auth, id);
+    },
+
     /** Satıcının girişi bağlanır, satış tarixçəsində adı qalır, email və FIN təkrar istifadə oluna bilər. */
     async deleteAssociate(auth: AuthContext, id: number): Promise<void> {
       const storeId = requireStoreId(auth);
