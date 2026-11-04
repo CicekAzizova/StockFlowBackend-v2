@@ -34,6 +34,21 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => service.getMe(request.auth.userId),
   );
 
+  // Authenticate hook-u artıq "son aktivlik"i yeniləyir, bu sorğu yalnız iOS-un yüngül ping-i üçündür.
+  app.post(
+    '/me/heartbeat',
+    {
+      config: { allowUnverified: true },
+      schema: {
+        tags: ['Profile'],
+        summary: 'Lightweight ping so the owner can see the associate is online',
+        security: secured,
+        response: { 200: messageResponse },
+      },
+    },
+    async () => ({ message: 'OK' }),
+  );
+
   app.patch(
     '/me',
     {

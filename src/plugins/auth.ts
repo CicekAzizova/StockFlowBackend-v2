@@ -2,7 +2,11 @@ import fastifyJwt from '@fastify/jwt';
 import fp from 'fastify-plugin';
 import type { AuthContext, Role } from '../app-types.js';
 import { queryOne } from '../db/pool.js';
+import { touchActivity } from '../modules/users/users.repository.js';
 import { forbidden, unauthorized } from '../shared/errors.js';
+
+/** Satıcının son aktivlik vaxtı bu intervaldan tez-tez yazılmır. */
+const ACTIVITY_WRITE_INTERVAL_SECONDS = 60;
 
 /**
  * JWT yoxlaması və rol yoxlaması.
@@ -37,14 +41,19 @@ export const authPlugin = fp(async (app) => {
 
     // Satıcı silinibsə və ya deaktiv edilibsə, köhnə access token də dərhal işləməsin.
     if (role === 'SALES_ASSOCIATE') {
-      const row = await queryOne<{ is_active: boolean }>(
+      const row = await queryOne<{ is_active: boolean; stale: boolean }>(
         app.deps.pool,
-        'SELECT is_active FROM users WHERE id = $1 AND deleted_at IS NULL',
-        [request.auth.userId],
+        `SELECT is_active,
+                (last_active_at IS NULL OR last_active_at < now() - $2::int * interval '1 second')
+                  AS stale
+         FROM users WHERE id = $1 AND deleted_at IS NULL`,
+        [request.auth.userId, ACTIVITY_WRITE_INTERVAL_SECONDS],
       );
       if (!row?.is_active) {
         throw unauthorized('ACCOUNT_DEACTIVATED', 'This account is no longer active');
       }
+      // Hər sorğuda yazmamaq üçün ən çox dəqiqədə bir dəfə yenilənir.
+      if (row.stale) await touchActivity(app.deps.pool, request.auth.userId);
     }
 
     if (config.auth.requireVerifiedEmail && !ev && !request.routeOptions.config.allowUnverified) {

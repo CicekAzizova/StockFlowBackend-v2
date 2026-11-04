@@ -131,6 +131,38 @@ describe('team', () => {
     expect(again.status).toBe(200);
   });
 
+  it('shows whether an associate is online', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+
+    // Hələ heç nə etməyib: oflayn və son aktivlik yoxdur.
+    let row = (await http.get('/users', owner.token)).body[0];
+    expect(row).toMatchObject({ is_online: false, last_active_at: null });
+
+    // İstənilən sorğu (məsələn heartbeat) onu onlayn edir.
+    expect((await http.post('/users/me/heartbeat', {}, seller.token)).status).toBe(200);
+    row = (await http.get('/users', owner.token)).body[0];
+    expect(row.is_online).toBe(true);
+    expect(row.last_active_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+
+    // 10 dəqiqə əvvəl: oflayn, amma son aktivlik qalır.
+    await ctx.pool.query(
+      "UPDATE users SET last_active_at = now() - interval '10 minutes' WHERE id = $1",
+      [seller.id],
+    );
+    row = (await http.get('/users', owner.token)).body[0];
+    expect(row.is_online).toBe(false);
+    expect(row.last_active_at).not.toBeNull();
+
+    // Dəqiqədə bir dəfədən tez yazılmır, amma köhnəlmişsə yenilənir.
+    await http.post('/users/me/heartbeat', {}, seller.token);
+    expect((await http.get('/users', owner.token)).body[0].is_online).toBe(true);
+
+    // Deaktiv satıcı onlayn sayılmır.
+    await http.post(`/users/sales-associate/${seller.id}/deactivate`, {}, owner.token);
+    expect((await http.get('/users', owner.token)).body[0].is_online).toBe(false);
+  });
+
   it('only the owner can deactivate, and only own associates', async () => {
     const owner = await registerOwner(ctx);
     const seller = await createAssociate(ctx, owner);

@@ -55,6 +55,10 @@ export const associateDtoSchema = z.object({
   avatar_url: z.string().nullable(),
   /** false: sahib deaktiv edib, satıcı daxil ola bilmir. */
   is_active: z.boolean(),
+  /** Son 5 dəqiqədə aktiv olubsa true (deaktiv satıcı həmişə false). */
+  is_online: z.boolean(),
+  /** Son aktivlik, UTC yyyy-MM-dd HH:mm:ss. Heç daxil olmayıbsa null. */
+  last_active_at: z.string().nullable(),
   created_at: z.string(),
   today_sales: z.number(),
   today_orders: z.number().int(),
@@ -65,6 +69,12 @@ export const associateDtoSchema = z.object({
 });
 
 export type AssociateDto = z.infer<typeof associateDtoSchema>;
+
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+function isOnline(lastActiveAt: Date | null): boolean {
+  return lastActiveAt !== null && Date.now() - lastActiveAt.getTime() < ONLINE_WINDOW_MS;
+}
 
 export function toAssociateDto(row: AssociateRow, monthTotal: number): AssociateDto {
   return {
@@ -78,6 +88,8 @@ export function toAssociateDto(row: AssociateRow, monthTotal: number): Associate
     store_id: row.store_id,
     avatar_url: row.avatar_url,
     is_active: row.is_active,
+    is_online: row.is_active && isOnline(row.last_active_at),
+    last_active_at: row.last_active_at ? formatTimestamp(row.last_active_at) : null,
     created_at: formatTimestamp(row.created_at),
     today_sales: row.today_sales,
     today_orders: row.today_orders,
