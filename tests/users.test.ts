@@ -79,6 +79,12 @@ describe('team', () => {
     expect(team.body).toHaveLength(1);
     expect(team.body[0]).toMatchObject({ id: seller.id, name: 'Ali' });
     expect(team.body[0].total_sales_this_month).toBe(20);
+    expect(team.body[0]).toMatchObject({
+      today_sales: 20,
+      today_orders: 1,
+      month_sales: 20,
+      month_orders: 1,
+    });
 
     const edited = await http.patch(
       `/users/sales-associate/${seller.id}`,

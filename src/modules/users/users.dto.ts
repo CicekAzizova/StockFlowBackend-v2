@@ -55,6 +55,10 @@ export const associateDtoSchema = z.object({
   avatar_url: z.string().nullable(),
   created_at: z.string(),
   today_sales: z.number(),
+  today_orders: z.number().int(),
+  /** Bu satıcının özünün aylıq satışı və satış sayı. */
+  month_sales: z.number(),
+  month_orders: z.number().int(),
   total_sales_this_month: z.number(),
 });
 
@@ -73,6 +77,9 @@ export function toAssociateDto(row: AssociateRow, monthTotal: number): Associate
     avatar_url: row.avatar_url,
     created_at: formatTimestamp(row.created_at),
     today_sales: row.today_sales,
+    today_orders: row.today_orders,
+    month_sales: row.month_sales,
+    month_orders: row.month_orders,
     // Köhnə API kimi: bütün mağazanın aylıq cəmi (iOS Team ekranının başlığı bunu göstərir).
     total_sales_this_month: monthTotal,
   };
