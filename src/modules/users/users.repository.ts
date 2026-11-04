@@ -37,6 +37,7 @@ export interface AssociateRow {
   store_id: number;
   avatar_url: string | null;
   is_active: boolean;
+  last_active_at: Date | null;
   created_at: Date;
   today_sales: number;
   today_orders: number;
@@ -177,7 +178,7 @@ export function listAssociates(
   return queryMany<AssociateRow>(
     db,
     `SELECT u.id, u.name, u.surname, u.fin, u.email, u.phone, u.role, u.store_id,
-            u.avatar_url, u.is_active, u.created_at,
+            u.avatar_url, u.is_active, u.last_active_at, u.created_at,
             COALESCE((
               SELECT SUM(s.total_price) FROM sales s
               WHERE s.sold_by = u.id
@@ -216,6 +217,11 @@ export function findAssociate(
      WHERE id = $1 AND store_id = $2 AND role = 'SALES_ASSOCIATE' AND deleted_at IS NULL`,
     [id, storeId],
   );
+}
+
+/** Satıcının "son aktivlik" vaxtını indiki vaxta qoyur. */
+export function touchActivity(db: Queryable, id: number): Promise<number> {
+  return execute(db, 'UPDATE users SET last_active_at = now() WHERE id = $1', [id]);
 }
 
 /** Satıcını deaktiv/aktiv etmək. Hesab, satış tarixçəsi, email və FIN olduğu kimi qalır. */
