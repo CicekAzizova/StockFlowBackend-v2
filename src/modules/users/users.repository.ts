@@ -37,6 +37,9 @@ export interface AssociateRow {
   avatar_url: string | null;
   created_at: Date;
   today_sales: number;
+  today_orders: number;
+  month_sales: number;
+  month_orders: number;
 }
 
 const WITH_STORE = `
@@ -177,7 +180,22 @@ export function listAssociates(
               SELECT SUM(s.total_price) FROM sales s
               WHERE s.sold_by = u.id
                 AND s.created_at >= date_trunc('day', now() AT TIME ZONE $2) AT TIME ZONE $2
-            ), 0) AS today_sales
+            ), 0) AS today_sales,
+            (
+              SELECT COUNT(*) FROM sales s
+              WHERE s.sold_by = u.id
+                AND s.created_at >= date_trunc('day', now() AT TIME ZONE $2) AT TIME ZONE $2
+            ) AS today_orders,
+            COALESCE((
+              SELECT SUM(s.total_price) FROM sales s
+              WHERE s.sold_by = u.id
+                AND s.created_at >= date_trunc('month', now() AT TIME ZONE $2) AT TIME ZONE $2
+            ), 0) AS month_sales,
+            (
+              SELECT COUNT(*) FROM sales s
+              WHERE s.sold_by = u.id
+                AND s.created_at >= date_trunc('month', now() AT TIME ZONE $2) AT TIME ZONE $2
+            ) AS month_orders
      FROM users u
      WHERE u.store_id = $1 AND u.role = 'SALES_ASSOCIATE' AND u.deleted_at IS NULL
      ORDER BY u.id DESC`,
