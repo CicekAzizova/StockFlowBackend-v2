@@ -25,6 +25,31 @@ beforeEach(async () => {
 const stockOf = async (id: number, token: string) =>
   (await http.get(`/products/${id}`, token)).body.quantity as number;
 
+describe('product image on sales', () => {
+  it('returns the first product image, or null when there is none', async () => {
+    const owner = await registerOwner(ctx);
+    const withImage = await createProduct(ctx, owner);
+    const without = await createProduct(ctx, owner);
+    await ctx.pool.query('UPDATE products SET image_urls = $2 WHERE id = $1', [
+      withImage.id,
+      ['https://example.com/a.jpg', 'https://example.com/b.jpg'],
+    ]);
+
+    const first = await http.post('/sales', { product_id: withImage.id, quantity: 1 }, owner.token);
+    const second = await http.post('/sales', { product_id: without.id, quantity: 1 }, owner.token);
+    expect(first.body.sale.product_image_url).toBe('https://example.com/a.jpg');
+    expect(first.body.sale.items[0].product_image_url).toBe('https://example.com/a.jpg');
+    expect(second.body.sale.product_image_url).toBeNull();
+
+    const list = await http.get('/sales', owner.token);
+    const urls = (list.body.items as { product_image_url: string | null }[]).map(
+      (sale) => sale.product_image_url,
+    );
+    expect(urls).toContain('https://example.com/a.jpg');
+    expect(urls).toContain(null);
+  });
+});
+
 describe('single-product sale (legacy iOS shape)', () => {
   it('reduces stock and returns camelCase keys plus the full sale', async () => {
     const owner = await registerOwner(ctx);

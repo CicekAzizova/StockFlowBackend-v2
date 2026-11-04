@@ -65,6 +65,7 @@ export const saleItemDto = z.object({
   quantity: z.number().int(),
   unit_price: z.number(),
   line_total: z.number(),
+  product_image_url: z.string().nullable().describe('Small version of the first product photo'),
 });
 
 /**
@@ -77,6 +78,7 @@ export const saleDto = z.object({
   receipt_no: z.number().int(),
   product_id: z.number().int(),
   product_name: z.string(),
+  product_image_url: z.string().nullable(),
   quantity: z.number().int(),
   unit_price: z.number(),
   total_price: z.number(),
