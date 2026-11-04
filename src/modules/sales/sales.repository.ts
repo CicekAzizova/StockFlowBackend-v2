@@ -10,6 +10,8 @@ export interface SaleItemRow {
   quantity: number;
   unit_price: number;
   line_total: number;
+  /** Yalnız oxuma zamanı doldurulur: məhsulun ilk şəkli (məhsul silinibsə null). */
+  product_image_url?: string | null;
 }
 
 export interface SaleRow {
@@ -36,7 +38,8 @@ const SELECT = `
          COALESCE((
            SELECT json_agg(json_build_object(
                     'product_id', i.product_id, 'product_name', i.product_name, 'sku', i.sku,
-                    'quantity', i.quantity, 'unit_price', i.unit_price, 'line_total', i.line_total
+                    'quantity', i.quantity, 'unit_price', i.unit_price, 'line_total', i.line_total,
+                    'product_image_url', (SELECT p.image_urls[1] FROM products p WHERE p.id = i.product_id)
                   ) ORDER BY i.id)
            FROM sale_items i WHERE i.sale_id = s.id
          ), '[]'::json) AS items

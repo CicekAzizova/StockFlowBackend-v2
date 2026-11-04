@@ -1,5 +1,6 @@
 import type { AppDeps, AuthContext } from '../../app-types.js';
 import { withTransaction } from '../../db/pool.js';
+import { thumbnailUrlFor } from '../../infra/images.js';
 import { badRequest, notFound } from '../../shared/errors.js';
 import { requireStoreId } from '../../shared/auth-helpers.js';
 import { discountedPrice, formatTimestamp, roundMoney } from '../../shared/formatting.js';
@@ -8,17 +9,25 @@ import * as stores from '../stores/stores.repository.js';
 import * as repo from './sales.repository.js';
 import type { SaleRow } from './sales.repository.js';
 import type { CreateSaleInput, SaleDto } from './sales.schemas.js';
+import type { Storage } from '../../infra/storage/storage.js';
 
 export type SalesService = ReturnType<typeof createSalesService>;
 
-export function toSaleDto(row: SaleRow): SaleDto {
+export function toSaleDto(row: SaleRow, storage: Storage): SaleDto {
+  const items = row.items.map((item) => ({
+    ...item,
+    product_image_url: item.product_image_url
+      ? thumbnailUrlFor(storage, item.product_image_url)
+      : null,
+  }));
   // Köhnə iOS modeli düz sahələr gözləyir: onlar qəbzin ilk sətrindən götürülür.
-  const first = row.items[0];
+  const first = items[0];
   return {
     id: row.id,
     receipt_no: row.receipt_no,
     product_id: first?.product_id ?? 0,
     product_name: first?.product_name ?? '',
+    product_image_url: first?.product_image_url ?? null,
     quantity: first?.quantity ?? 0,
     unit_price: first?.unit_price ?? 0,
     total_price: row.total_price,
@@ -26,12 +35,12 @@ export function toSaleDto(row: SaleRow): SaleDto {
     seller_name: row.seller_name,
     payment_method: row.payment_method,
     created_at: formatTimestamp(row.created_at),
-    items: row.items,
+    items,
   };
 }
 
 export function createSalesService(deps: AppDeps) {
-  const { pool, config } = deps;
+  const { pool, config, storage } = deps;
 
   async function storeTimezone(storeId: number): Promise<string> {
     const store = await stores.findStoreById(pool, storeId);
@@ -90,7 +99,7 @@ export function createSalesService(deps: AppDeps) {
 
       const row = await repo.findSale(pool, storeId, saleId);
       if (!row) throw new Error('Sale disappeared after insert');
-      return toSaleDto(row);
+      return toSaleDto(row, storage);
     },
 
     async list(
@@ -112,7 +121,11 @@ export function createSalesService(deps: AppDeps) {
         { soldBy, from: query.from, to: query.to },
         { limit: query.limit, offset: offsetOf(query) },
       );
-      return toPage(rows.map(toSaleDto), total, query);
+      return toPage(
+        rows.map((row) => toSaleDto(row, storage)),
+        total,
+        query,
+      );
     },
 
     async getById(auth: AuthContext, id: number): Promise<SaleDto> {
@@ -123,7 +136,7 @@ export function createSalesService(deps: AppDeps) {
         auth.role === 'OWNER' ? undefined : auth.userId,
       );
       if (!row) throw notFound('SALE_NOT_FOUND', 'Sale not found');
-      return toSaleDto(row);
+      return toSaleDto(row, storage);
     },
 
     async summary(auth: AuthContext) {
