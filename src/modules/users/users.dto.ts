@@ -53,6 +53,8 @@ export const associateDtoSchema = z.object({
   role: z.literal('SALES_ASSOCIATE'),
   store_id: z.number().int(),
   avatar_url: z.string().nullable(),
+  /** false: sahib deaktiv edib, satıcı daxil ola bilmir. */
+  is_active: z.boolean(),
   created_at: z.string(),
   today_sales: z.number(),
   today_orders: z.number().int(),
@@ -75,6 +77,7 @@ export function toAssociateDto(row: AssociateRow, monthTotal: number): Associate
     role: 'SALES_ASSOCIATE',
     store_id: row.store_id,
     avatar_url: row.avatar_url,
+    is_active: row.is_active,
     created_at: formatTimestamp(row.created_at),
     today_sales: row.today_sales,
     today_orders: row.today_orders,

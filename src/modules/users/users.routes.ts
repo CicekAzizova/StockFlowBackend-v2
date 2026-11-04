@@ -154,6 +154,36 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => service.updateAssociate(request.auth, request.params.id, request.body),
   );
 
+  app.post(
+    '/sales-associate/:id/deactivate',
+    {
+      onRequest: [ownerOnly],
+      schema: {
+        tags: ['Team'],
+        summary: 'Deactivate a sales associate (login is blocked, account and sales are kept)',
+        security: secured,
+        params: idParams,
+        response: { 200: associateDtoSchema },
+      },
+    },
+    async (request) => service.deactivateAssociate(request.auth, request.params.id),
+  );
+
+  app.post(
+    '/sales-associate/:id/activate',
+    {
+      onRequest: [ownerOnly],
+      schema: {
+        tags: ['Team'],
+        summary: 'Activate a previously deactivated sales associate',
+        security: secured,
+        params: idParams,
+        response: { 200: associateDtoSchema },
+      },
+    },
+    async (request) => service.activateAssociate(request.auth, request.params.id),
+  );
+
   app.delete(
     '/:id',
     {

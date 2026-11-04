@@ -1,6 +1,7 @@
 import fastifyJwt from '@fastify/jwt';
 import fp from 'fastify-plugin';
 import type { AuthContext, Role } from '../app-types.js';
+import { queryOne } from '../db/pool.js';
 import { forbidden, unauthorized } from '../shared/errors.js';
 
 /**
@@ -33,6 +34,18 @@ export const authPlugin = fp(async (app) => {
 
     const { sub, role, storeId, ev } = request.user;
     request.auth = { userId: Number(sub), role, storeId, emailVerified: ev };
+
+    // Satıcı silinibsə və ya deaktiv edilibsə, köhnə access token də dərhal işləməsin.
+    if (role === 'SALES_ASSOCIATE') {
+      const row = await queryOne<{ is_active: boolean }>(
+        app.deps.pool,
+        'SELECT is_active FROM users WHERE id = $1 AND deleted_at IS NULL',
+        [request.auth.userId],
+      );
+      if (!row?.is_active) {
+        throw unauthorized('ACCOUNT_DEACTIVATED', 'This account is no longer active');
+      }
+    }
 
     if (config.auth.requireVerifiedEmail && !ev && !request.routeOptions.config.allowUnverified) {
       throw forbidden('EMAIL_NOT_VERIFIED', 'Please verify your email address');

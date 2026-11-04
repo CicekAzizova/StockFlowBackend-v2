@@ -11,7 +11,13 @@ import type { AccessTokenPayload, AppDeps } from '../../app-types.js';
 import type { Locale } from '../../config/env.js';
 import { isUniqueViolation, withTransaction, type Queryable } from '../../db/pool.js';
 import { codeEmail } from '../../infra/mail/templates.js';
-import { badRequest, conflict, tooManyRequests, unauthorized } from '../../shared/errors.js';
+import {
+  badRequest,
+  conflict,
+  forbidden,
+  tooManyRequests,
+  unauthorized,
+} from '../../shared/errors.js';
 import * as stores from '../stores/stores.repository.js';
 import * as subscriptions from '../subscriptions/subscriptions.repository.js';
 import * as users from '../users/users.repository.js';
@@ -200,6 +206,9 @@ export function createAuthService(
       if (!(await verifyPassword(user.password_hash, password))) {
         throw unauthorized('INVALID_CREDENTIALS', 'Invalid email or password');
       }
+      if (!user.is_active) {
+        throw forbidden('ACCOUNT_DEACTIVATED', 'This account has been deactivated by the owner');
+      }
       const session = await issueSession(pool, user, randomUUID(), userAgent);
       return { user, session };
     },
@@ -225,7 +234,7 @@ export function createAuthService(
         }
 
         const user = await users.findActiveById(tx, record.user_id);
-        if (!user) return { kind: 'invalid' as const };
+        if (!user?.is_active) return { kind: 'invalid' as const };
         return {
           kind: 'ok' as const,
           session: await issueSession(tx, user, record.family_id, userAgent),

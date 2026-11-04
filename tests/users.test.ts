@@ -102,6 +102,48 @@ describe('team', () => {
     expect((await http.get('/sales', owner.token)).body.total).toBe(1);
   });
 
+  it('deactivates and reactivates an associate without losing the account or sales', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 10 });
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, seller.token);
+
+    const off = await http.post(`/users/sales-associate/${seller.id}/deactivate`, {}, owner.token);
+    expect(off.status).toBe(200);
+    expect(off.body.is_active).toBe(false);
+
+    // Köhnə token da, yeni giriş də bağlanır.
+    expect((await http.get('/sales', seller.token)).status).toBe(401);
+    const login = await http.post('/auth/login', { email: seller.email, password: 'seller123' });
+    expect(login.status).toBe(403);
+    expect(login.body.code).toBe('ACCOUNT_DEACTIVATED');
+
+    // Siyahıda qalır, satış tarixçəsi qalır.
+    const team = await http.get('/users', owner.token);
+    expect(team.body).toHaveLength(1);
+    expect(team.body[0]).toMatchObject({ id: seller.id, is_active: false, month_orders: 1 });
+    expect((await http.get('/sales', owner.token)).body.total).toBe(1);
+
+    const on = await http.post(`/users/sales-associate/${seller.id}/activate`, {}, owner.token);
+    expect(on.status).toBe(200);
+    expect(on.body.is_active).toBe(true);
+    const again = await http.post('/auth/login', { email: seller.email, password: 'seller123' });
+    expect(again.status).toBe(200);
+  });
+
+  it('only the owner can deactivate, and only own associates', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+    const other = await registerOwner(ctx);
+
+    expect(
+      (await http.post(`/users/sales-associate/${seller.id}/deactivate`, {}, seller.token)).status,
+    ).toBe(403);
+    expect(
+      (await http.post(`/users/sales-associate/${seller.id}/deactivate`, {}, other.token)).status,
+    ).toBe(404);
+  });
+
   it('rejects a duplicate email or FIN with the old message', async () => {
     const owner = await registerOwner(ctx);
     const first = await createAssociate(ctx, owner, { fin: 'SAME123' });

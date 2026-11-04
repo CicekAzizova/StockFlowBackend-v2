@@ -15,6 +15,7 @@ export interface UserRecord {
   avatar_url: string | null;
   locale: Locale;
   email_verified_at: Date | null;
+  is_active: boolean;
   deleted_at: Date | null;
   created_at: Date;
 }
@@ -35,6 +36,7 @@ export interface AssociateRow {
   role: Role;
   store_id: number;
   avatar_url: string | null;
+  is_active: boolean;
   created_at: Date;
   today_sales: number;
   today_orders: number;
@@ -175,7 +177,7 @@ export function listAssociates(
   return queryMany<AssociateRow>(
     db,
     `SELECT u.id, u.name, u.surname, u.fin, u.email, u.phone, u.role, u.store_id,
-            u.avatar_url, u.created_at,
+            u.avatar_url, u.is_active, u.created_at,
             COALESCE((
               SELECT SUM(s.total_price) FROM sales s
               WHERE s.sold_by = u.id
@@ -214,6 +216,14 @@ export function findAssociate(
      WHERE id = $1 AND store_id = $2 AND role = 'SALES_ASSOCIATE' AND deleted_at IS NULL`,
     [id, storeId],
   );
+}
+
+/** Satıcını deaktiv/aktiv etmək. Hesab, satış tarixçəsi, email və FIN olduğu kimi qalır. */
+export function setActive(db: Queryable, id: number, isActive: boolean): Promise<number> {
+  return execute(db, 'UPDATE users SET is_active = $2, updated_at = now() WHERE id = $1', [
+    id,
+    isActive,
+  ]);
 }
 
 /** Sahibin sildiyi satıcı: giriş bağlanır, satış tarixçəsində adı qalır. */
