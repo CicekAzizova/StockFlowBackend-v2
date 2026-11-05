@@ -237,3 +237,39 @@ export async function storeMonthTotal(
   );
   return row?.total ?? 0;
 }
+
+export interface DailySalesRow {
+  date: string;
+  total: number;
+  orders: number;
+}
+
+/** Son N günün hər günü üçün satış cəmi (mağazanın saat qurşağında), satışsız günlər sıfırla. */
+export function dailySales(
+  db: Queryable,
+  storeId: number,
+  timezone: string,
+  days: number,
+  soldBy?: number,
+): Promise<DailySalesRow[]> {
+  return queryMany<DailySalesRow>(
+    db,
+    `WITH today AS (SELECT (now() AT TIME ZONE $2)::date AS day),
+          series AS (
+            SELECT (t.day - g)::date AS day
+            FROM today t, generate_series(0, $3::int - 1) AS g
+          )
+     SELECT to_char(series.day, 'YYYY-MM-DD') AS date,
+            COALESCE(SUM(s.total_price), 0) AS total,
+            COUNT(s.id) AS orders
+     FROM series
+     LEFT JOIN sales s
+       ON s.store_id = $1
+      AND s.created_at >= ((SELECT day FROM today) - ($3::int - 1))::timestamp AT TIME ZONE $2
+      AND (s.created_at AT TIME ZONE $2)::date = series.day
+      AND ($4::bigint IS NULL OR s.sold_by = $4)
+     GROUP BY series.day
+     ORDER BY series.day`,
+    [storeId, timezone, days, soldBy ?? null],
+  );
+}

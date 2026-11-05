@@ -3,6 +3,8 @@ import { idParams, paginatedResponse } from '../../shared/schemas.js';
 import {
   createSaleBody,
   createSaleResponse,
+  dailySalesQuery,
+  dailySalesResponse,
   saleDto,
   salesListQuery,
   salesSummaryResponse,
@@ -52,6 +54,21 @@ export const salesRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => service.summary(request.auth),
+  );
+
+  app.get(
+    '/daily',
+    {
+      schema: {
+        tags: ['Sales'],
+        summary:
+          'Sales per day for the last N days (default 7, store time zone). Associates see only their own.',
+        security: secured,
+        querystring: dailySalesQuery,
+        response: { 200: dailySalesResponse },
+      },
+    },
+    async (request) => service.daily(request.auth, request.query.days),
   );
 
   app.get(
