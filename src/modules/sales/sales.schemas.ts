@@ -106,3 +106,26 @@ export const salesSummaryResponse = z.object({
   total_sales: z.number().describe('Total for the current month'),
   total_orders: z.number().int().describe('Number of sales in the current month'),
 });
+
+export const dailySalesQuery = z.object({
+  days: z.coerce
+    .number()
+    .int()
+    .min(1, { error: 'days must be between 1 and 31' })
+    .max(31, { error: 'days must be between 1 and 31' })
+    .default(7),
+});
+
+export const dailySalesResponse = z.object({
+  days: z
+    .array(
+      z.object({
+        date: z.string().describe('Day in the store time zone, YYYY-MM-DD'),
+        total: z.number(),
+        orders: z.number().int(),
+      }),
+    )
+    .describe('Oldest first. The last item is today. Days without sales are included as zeros.'),
+  total: z.number().describe('Sum of all returned days'),
+  orders: z.number().int().describe('Number of sales in all returned days'),
+});

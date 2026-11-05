@@ -139,6 +139,24 @@ export function createSalesService(deps: AppDeps) {
       return toSaleDto(row, storage);
     },
 
+    /** Son N günün gündəlik satışları. Sahib bütün mağazanı, satıcı yalnız özünü görür. */
+    async daily(auth: AuthContext, days: number) {
+      const storeId = requireStoreId(auth);
+      const timezone = await storeTimezone(storeId);
+      const rows = await repo.dailySales(
+        pool,
+        storeId,
+        timezone,
+        days,
+        auth.role === 'OWNER' ? undefined : auth.userId,
+      );
+      return {
+        days: rows,
+        total: roundMoney(rows.reduce((sum, row) => sum + row.total, 0)),
+        orders: rows.reduce((sum, row) => sum + row.orders, 0),
+      };
+    },
+
     async summary(auth: AuthContext) {
       const storeId = requireStoreId(auth);
       const timezone = await storeTimezone(storeId);

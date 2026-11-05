@@ -25,6 +25,50 @@ beforeEach(async () => {
 const stockOf = async (id: number, token: string) =>
   (await http.get(`/products/${id}`, token)).body.quantity as number;
 
+describe('daily sales', () => {
+  it('returns one entry per day, oldest first, with empty days as zeros', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50 });
+    await http.post('/sales', { product_id: p.id, quantity: 2 }, owner.token);
+    const old = await http.post('/sales', { product_id: p.id, quantity: 3 }, owner.token);
+    await ctx.pool.query(
+      "UPDATE sales SET created_at = created_at - interval '1 day' WHERE id = $1",
+      [old.body.saleId],
+    );
+
+    const res = await http.get('/sales/daily', owner.token);
+    expect(res.status).toBe(200);
+    expect(res.body.days).toHaveLength(7);
+    const [first, , , , , yesterday, today] = res.body.days;
+    expect(first).toMatchObject({ total: 0, orders: 0 });
+    expect(yesterday).toMatchObject({ total: 30, orders: 1 });
+    expect(today).toMatchObject({ total: 20, orders: 1 });
+    expect(res.body).toMatchObject({ total: 50, orders: 2 });
+    expect(today.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(today.date > yesterday.date).toBe(true);
+  });
+
+  it('supports ?days and rejects values out of range', async () => {
+    const owner = await registerOwner(ctx);
+    expect((await http.get('/sales/daily?days=3', owner.token)).body.days).toHaveLength(3);
+    expect((await http.get('/sales/daily?days=0', owner.token)).status).toBe(400);
+    expect((await http.get('/sales/daily?days=32', owner.token)).status).toBe(400);
+  });
+
+  it('shows an associate only their own sales', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50 });
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+    await http.post('/sales', { product_id: p.id, quantity: 4 }, seller.token);
+
+    const mine = await http.get('/sales/daily', seller.token);
+    expect(mine.body).toMatchObject({ total: 40, orders: 1 });
+    const store = await http.get('/sales/daily', owner.token);
+    expect(store.body).toMatchObject({ total: 50, orders: 2 });
+  });
+});
+
 describe('product image on sales', () => {
   it('returns the first product image, or null when there is none', async () => {
     const owner = await registerOwner(ctx);
