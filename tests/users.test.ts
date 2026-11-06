@@ -67,6 +67,39 @@ describe('profile', () => {
   });
 });
 
+describe('store currency', () => {
+  it('defaults to AZN and is shared by the whole store', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+
+    expect((await http.get('/users/me', owner.token)).body.currency).toBe('AZN');
+    expect((await http.get('/stores/current', owner.token)).body.currency).toBe('AZN');
+
+    const patched = await http.patch('/stores/current', { currency: 'USD' }, owner.token);
+    expect(patched.status).toBe(200);
+    expect(patched.body.currency).toBe('USD');
+
+    expect((await http.get('/users/me', owner.token)).body.currency).toBe('USD');
+    expect((await http.get('/users/me', seller.token)).body.currency).toBe('USD');
+  });
+
+  it('rejects unsupported currencies and non-owners', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+
+    expect((await http.patch('/stores/current', { currency: 'XXX' }, owner.token)).status).toBe(
+      400,
+    );
+    expect((await http.patch('/stores/current', { currency: 'usd' }, owner.token)).status).toBe(
+      400,
+    );
+    expect((await http.patch('/stores/current', { currency: 'EUR' }, seller.token)).status).toBe(
+      403,
+    );
+    expect((await http.get('/stores/current', owner.token)).body.currency).toBe('AZN');
+  });
+});
+
 describe('team', () => {
   it('creates, lists, edits and removes associates', async () => {
     const owner = await registerOwner(ctx);

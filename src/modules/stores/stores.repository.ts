@@ -7,10 +7,11 @@ export interface StoreRecord {
   address: string;
   phone: string;
   timezone: string;
+  currency: string;
   created_at: Date;
 }
 
-const COLUMNS = 'id, owner_id, name, address, phone, timezone, created_at';
+const COLUMNS = 'id, owner_id, name, address, phone, timezone, currency, created_at';
 
 export function insertStore(
   db: Queryable,
@@ -31,7 +32,7 @@ export function findStoreById(db: Queryable, id: number): Promise<StoreRecord | 
 export async function updateStore(
   db: Queryable,
   id: number,
-  fields: { name?: string; address?: string; phone?: string },
+  fields: { name?: string; address?: string; phone?: string; currency?: string },
 ): Promise<StoreRecord | null> {
   const set = buildSetClause(fields, 2);
   if (set.sql === '') return findStoreById(db, id);
