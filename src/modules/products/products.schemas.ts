@@ -69,6 +69,14 @@ export const stockBody = z.object({
     .min(0, 'Quantity must be a non-negative integer'),
 });
 
+export const restockBody = z.object({
+  quantity: z
+    .number({ error: 'Quantity must be a positive integer' })
+    .int('Quantity must be a positive integer')
+    .min(1, 'Quantity must be a positive integer')
+    .max(1_000_000, 'Quantity is too large'),
+});
+
 /** iOS-dakı ProductsResponse modeli bu açarlara güvənir. Silməyin, yalnız əlavə edin. */
 export const productDto = z.object({
   id: z.number().int(),
@@ -87,6 +95,7 @@ export const productDto = z.object({
   weight: z.number().nullable(),
   weight_unit: z.enum(WEIGHT_UNITS).nullable(),
   size: z.string().nullable(),
+  sold_this_month: z.number().int().describe('Units sold this month (store time zone)'),
   created_at: z.string().describe('UTC, format yyyy-MM-dd HH:mm:ss'),
   updated_at: z.string().describe('UTC, format yyyy-MM-dd HH:mm:ss'),
 });

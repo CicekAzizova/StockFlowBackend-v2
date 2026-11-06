@@ -187,6 +187,63 @@ describe('listing', () => {
   });
 });
 
+describe('restock and monthly sales', () => {
+  it('adds units to the stock and returns the product', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { sku: 'RS-1', quantity: 2, low_stock_limit: 5 });
+
+    const res = await http.post(`/products/${p.id}/restock`, { quantity: 20 }, owner.token);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: p.id, quantity: 22 });
+    expect((await http.get('/products/low-stock', owner.token)).body.items).toHaveLength(0);
+
+    expect(
+      (await http.post(`/products/${p.id}/restock`, { quantity: 0 }, owner.token)).status,
+    ).toBe(400);
+    expect(
+      (await http.post(`/products/${p.id}/restock`, { quantity: 1.5 }, owner.token)).status,
+    ).toBe(400);
+    expect((await http.post('/products/999999/restock', { quantity: 1 }, owner.token)).status).toBe(
+      404,
+    );
+  });
+
+  it('is owner-only and limited to the own store', async () => {
+    const owner = await registerOwner(ctx);
+    const other = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+    const p = await createProduct(ctx, owner, { sku: 'RS-2', quantity: 1 });
+
+    expect(
+      (await http.post(`/products/${p.id}/restock`, { quantity: 5 }, seller.token)).status,
+    ).toBe(403);
+    expect(
+      (await http.post(`/products/${p.id}/restock`, { quantity: 5 }, other.token)).status,
+    ).toBe(404);
+    expect((await http.get(`/products/${p.id}`, owner.token)).body.quantity).toBe(1);
+  });
+
+  it('reports units sold this month per product', async () => {
+    const owner = await registerOwner(ctx);
+    const seller = await createAssociate(ctx, owner);
+    const sold = await createProduct(ctx, owner, { sku: 'SM-1', quantity: 20, price: 5 });
+    const unsold = await createProduct(ctx, owner, { sku: 'SM-2', quantity: 3 });
+
+    await http.post('/sales', { product_id: sold.id, quantity: 4 }, seller.token);
+    await http.post('/sales', { product_id: sold.id, quantity: 3 }, seller.token);
+
+    expect((await http.get(`/products/${sold.id}`, owner.token)).body.sold_this_month).toBe(7);
+    expect((await http.get(`/products/${unsold.id}`, owner.token)).body.sold_this_month).toBe(0);
+
+    // Keçən ayın satışı sayılmır.
+    await ctx.pool.query("UPDATE sales SET created_at = now() - interval '40 days'");
+    expect((await http.get(`/products/${sold.id}`, owner.token)).body.sold_this_month).toBe(0);
+
+    const low = await http.get('/products/low-stock', owner.token);
+    expect(low.body.items[0]).toHaveProperty('sold_this_month');
+  });
+});
+
 describe('plan limit', () => {
   it('blocks new products once the free limit is reached', async () => {
     const limited = await createContext({ FREE_PRODUCT_LIMIT: '2' });

@@ -17,6 +17,8 @@ export interface ProductRow {
   weight: number | null;
   weight_unit: 'mg' | 'g' | 'kg' | 'ml' | 'l' | null;
   size: string | null;
+  /** Bu ay (mağazanın saat qurşağı ilə) satılan ədəd sayı. */
+  sold_this_month: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -32,8 +34,17 @@ export interface ProductFilters {
 const SELECT = `
   SELECT p.id, p.store_id, p.name, p.sku, COALESCE(c.name, '') AS category, p.description,
          p.price, p.discount, p.cost_price, p.quantity, p.low_stock_limit, p.image_urls,
-         p.weight, p.weight_unit, p.size, p.created_at, p.updated_at
+         p.weight, p.weight_unit, p.size, p.created_at, p.updated_at,
+         COALESCE((
+           SELECT SUM(si.quantity)
+           FROM sale_items si
+           JOIN sales s ON s.id = si.sale_id
+           WHERE si.product_id = p.id
+             AND s.created_at >= date_trunc('month', now() AT TIME ZONE st.timezone)
+                                 AT TIME ZONE st.timezone
+         ), 0)::int AS sold_this_month
   FROM products p
+  JOIN stores st ON st.id = p.store_id
   LEFT JOIN categories c ON c.id = p.category_id`;
 
 function buildWhere(storeId: number, filters: ProductFilters) {
@@ -184,6 +195,21 @@ export function setQuantity(
     `UPDATE products SET quantity = $3, updated_at = now()
      WHERE id = $1 AND store_id = $2 AND deleted_at IS NULL`,
     [id, storeId, quantity],
+  );
+}
+
+/** Qalığa ədəd əlavə edir (təhlükəsiz: server toplayır, iki sorğu bir-birini silmir). */
+export function addQuantity(
+  db: Queryable,
+  storeId: number,
+  id: number,
+  amount: number,
+): Promise<number> {
+  return execute(
+    db,
+    `UPDATE products SET quantity = quantity + $3, updated_at = now()
+     WHERE id = $1 AND store_id = $2 AND deleted_at IS NULL`,
+    [id, storeId, amount],
   );
 }
 
