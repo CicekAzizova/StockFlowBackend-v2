@@ -24,6 +24,8 @@ export interface UserRecord {
 export interface UserWithStore extends UserRecord {
   effective_store_id: number | null;
   store_name: string | null;
+  /** Mağazanın valyutası; mağazası olmayan istifadəçidə null. */
+  store_currency: string | null;
 }
 
 export interface AssociateRow {
@@ -46,10 +48,10 @@ export interface AssociateRow {
 }
 
 const WITH_STORE = `
-  SELECT u.*, s.id AS effective_store_id, s.name AS store_name
+  SELECT u.*, s.id AS effective_store_id, s.name AS store_name, s.currency AS store_currency
   FROM users u
   LEFT JOIN LATERAL (
-    SELECT st.id, st.name FROM stores st
+    SELECT st.id, st.name, st.currency FROM stores st
     WHERE (u.role = 'SALES_ASSOCIATE' AND st.id = u.store_id)
        OR (u.role = 'OWNER' AND st.owner_id = u.id)
     ORDER BY st.id

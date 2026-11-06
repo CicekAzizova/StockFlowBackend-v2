@@ -45,10 +45,14 @@ export const deleteAccountBody = z.object({
   password: z.string({ error: 'Password is required' }).min(1, 'Password is required'),
 });
 
+/** Dəstəklənən valyutalar (ISO 4217). Yeni valyuta əlavə etmək üçün yalnız bu siyahıya yazın. */
+export const CURRENCIES = ['AZN', 'USD', 'EUR', 'TRY', 'RUB', 'GBP'] as const;
+
 export const updateStoreBody = z.object({
   name: requiredString(120).optional(),
   address: requiredString(250).optional(),
   phone: phoneSchema.optional(),
+  currency: z.enum(CURRENCIES, { error: 'Unsupported currency' }).optional(),
 });
 
 export const storeDto = z.object({
@@ -57,4 +61,5 @@ export const storeDto = z.object({
   address: z.string(),
   phone: z.string(),
   timezone: z.string(),
+  currency: z.string(),
 });
