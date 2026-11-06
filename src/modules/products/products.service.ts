@@ -36,6 +36,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       weight: row.weight,
       weight_unit: row.weight_unit,
       size: row.size,
+      sold_this_month: row.sold_this_month,
       created_at: formatTimestamp(row.created_at),
       updated_at: formatTimestamp(row.updated_at),
     };
@@ -190,6 +191,15 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
     async remove(auth: AuthContext, id: number): Promise<void> {
       const deleted = await repo.softDeleteProduct(pool, requireStoreId(auth), id);
       if (!deleted) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+    },
+
+    async restock(auth: AuthContext, id: number, amount: number): Promise<ProductDto> {
+      const storeId = requireStoreId(auth);
+      const updated = await repo.addQuantity(pool, storeId, id, amount);
+      if (!updated) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+      const row = await repo.findProductById(pool, storeId, id);
+      if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+      return toDto(row, auth.role);
     },
 
     async setStock(auth: AuthContext, id: number, quantity: number): Promise<void> {

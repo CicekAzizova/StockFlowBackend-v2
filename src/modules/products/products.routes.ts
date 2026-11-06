@@ -5,6 +5,7 @@ import {
   productBody,
   productDto,
   productListQuery,
+  restockBody,
   skuQuery,
   stockBody,
 } from './products.schemas.js';
@@ -143,5 +144,22 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
       await service.setStock(request.auth, request.params.id, request.body.quantity);
       return { message: 'Stock updated successfully' };
     },
+  );
+
+  app.post(
+    '/:id/restock',
+    {
+      onRequest: [ownerOnly],
+      schema: {
+        tags: ['Products'],
+        summary: 'Add units to the stock quantity (owner only)',
+        description: 'The quantity is added to the current stock, not set.',
+        security: secured,
+        params: idParams,
+        body: restockBody,
+        response: { 200: productDto },
+      },
+    },
+    async (request) => service.restock(request.auth, request.params.id, request.body.quantity),
   );
 };
