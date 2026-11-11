@@ -19,6 +19,7 @@ import type { AppConfig } from './config/env.js';
 import { authPlugin } from './plugins/auth.js';
 import { registerErrorHandling } from './plugins/error-handler.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import { catalogRoutes } from './modules/catalog/catalog.routes.js';
 import { categoryRoutes } from './modules/categories/categories.routes.js';
 import { productRoutes } from './modules/products/products.routes.js';
 import { salesRoutes } from './modules/sales/sales.routes.js';
@@ -164,6 +165,7 @@ export async function buildApp(deps: AppDeps) {
   await app.register(authRoutes, { prefix: '/auth' });
   await app.register(userRoutes, { prefix: '/users' });
   await app.register(storeRoutes, { prefix: '/stores' });
+  await app.register(catalogRoutes, { prefix: '/catalog' });
   await app.register(categoryRoutes, { prefix: '/categories' });
   await app.register(productRoutes, { prefix: '/products' });
   await app.register(salesRoutes, { prefix: '/sales' });

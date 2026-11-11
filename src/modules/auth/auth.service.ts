@@ -49,6 +49,7 @@ export interface RegisterInput {
   store_phone: string;
   locale: Locale;
   currency: string;
+  main_categories: string[];
 }
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -180,6 +181,7 @@ export function createAuthService(
             phone: input.store_phone,
             timezone: config.defaultTimezone,
             currency: input.currency,
+            main_categories: input.main_categories,
           });
           if (!store) throw new Error('Failed to insert store');
           await subscriptions.createFreeSubscription(tx, ownerId, config.freeProductLimit);

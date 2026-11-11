@@ -7,7 +7,9 @@ import { requireStoreId } from '../../shared/auth-helpers.js';
 import { formatTimestamp } from '../../shared/formatting.js';
 import { offsetOf, toPage, type PaginationQuery } from '../../shared/schemas.js';
 import * as categories from '../categories/categories.repository.js';
+import * as stores from '../stores/stores.repository.js';
 import * as subscriptions from '../subscriptions/subscriptions.repository.js';
+import { isSubcategoryOfAny } from '../catalog/catalog.data.js';
 import * as repo from './products.repository.js';
 import type { ProductFilters, ProductRow, ProductWrite } from './products.repository.js';
 import type { ProductBody, ProductDto } from './products.schemas.js';
@@ -36,6 +38,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       weight: row.weight,
       weight_unit: row.weight_unit,
       size: row.size,
+      subcategory: row.subcategory,
       sold_this_month: row.sold_this_month,
       created_at: formatTimestamp(row.created_at),
       updated_at: formatTimestamp(row.updated_at),
@@ -48,6 +51,22 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       throw badRequest(
         'INVALID_IMAGE_URL',
         'Image URLs must come from the StockFlow upload endpoint',
+      );
+    }
+  }
+
+  /** Alt kateqoriya mağazanın seçdiyi əsas kateqoriyalardan birinə aid olmalıdır. */
+  async function assertSubcategory(
+    db: Parameters<typeof stores.findStoreById>[0],
+    storeId: number,
+    subcategory: string | null | undefined,
+  ): Promise<void> {
+    if (subcategory === undefined || subcategory === null) return;
+    const store = await stores.findStoreById(db, storeId);
+    if (!store || !isSubcategoryOfAny(subcategory, store.main_categories)) {
+      throw badRequest(
+        'INVALID_SUBCATEGORY',
+        'Subcategory does not belong to the categories of this store',
       );
     }
   }
@@ -102,6 +121,8 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
           // Eyni sahibin paralel sorğuları plan limitini aşmasın deyə növbəyə qoyulur.
           await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`products:${auth.userId}`]);
 
+          await assertSubcategory(tx, storeId, body.subcategory);
+
           const limit = await subscriptions.getProductLimit(tx, auth.userId);
           if (limit !== null && (await repo.countActiveProductsOfOwner(tx, auth.userId)) >= limit) {
             throw forbidden('PRODUCT_LIMIT_REACHED', `Your plan allows up to ${limit} products`, {
@@ -123,6 +144,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
             weight: body.weight ?? null,
             weight_unit: body.weight_unit ?? null,
             size: body.size ?? null,
+            subcategory: body.subcategory ?? null,
           });
           const row = await repo.findProductById(tx, storeId, id);
           if (!row) throw new Error('Product disappeared after insert');
@@ -146,6 +168,8 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
           const existing = await repo.findProductById(tx, storeId, id);
           if (!existing) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
 
+          await assertSubcategory(tx, storeId, body.subcategory);
+
           const fields: Partial<ProductWrite> = {
             name: body.name,
             sku: body.sku,
@@ -159,6 +183,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
             weight: body.weight,
             weight_unit: body.weight_unit,
             size: body.size,
+            subcategory: body.subcategory,
           };
           const categoryId = await categoryIdFor(tx, storeId, body.category);
           if (categoryId !== undefined) fields.category_id = categoryId;

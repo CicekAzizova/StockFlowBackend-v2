@@ -17,6 +17,7 @@ export const storeRoutes: FastifyPluginAsyncZod = async (app) => {
     phone: store.phone,
     timezone: store.timezone,
     currency: store.currency,
+    main_categories: store.main_categories,
   });
 
   app.get(
@@ -42,7 +43,7 @@ export const storeRoutes: FastifyPluginAsyncZod = async (app) => {
       onRequest: [app.requireRole('OWNER')],
       schema: {
         tags: ['Store'],
-        summary: 'Edit the store name, address, phone or currency (owner only)',
+        summary: 'Edit the store name, address, phone, currency or categories (owner only)',
         security: secured,
         body: updateStoreBody,
         response: { 200: storeDto },

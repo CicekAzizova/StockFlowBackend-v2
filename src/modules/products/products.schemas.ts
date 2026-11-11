@@ -46,6 +46,7 @@ export const productBody = z.object({
   weight: z.number().min(0).max(10_000_000).nullable().optional(),
   weight_unit: z.enum(WEIGHT_UNITS).nullable().optional(),
   size: optionalString(80).nullable().optional(),
+  subcategory: z.string().trim().min(1).max(64).nullable().optional(),
 });
 
 export type ProductBody = z.infer<typeof productBody>;
@@ -95,6 +96,7 @@ export const productDto = z.object({
   weight: z.number().nullable(),
   weight_unit: z.enum(WEIGHT_UNITS).nullable(),
   size: z.string().nullable(),
+  subcategory: z.string().nullable().describe('Catalog code such as food.dairy'),
   sold_this_month: z.number().int().describe('Units sold this month (store time zone)'),
   created_at: z.string().describe('UTC, format yyyy-MM-dd HH:mm:ss'),
   updated_at: z.string().describe('UTC, format yyyy-MM-dd HH:mm:ss'),
