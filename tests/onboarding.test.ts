@@ -94,3 +94,53 @@ describe('store country, city and onboarding', () => {
     expect((await http.patch('/stores/current', { city: 'Baku' }, seller.token)).status).toBe(403);
   });
 });
+
+describe('review fixes', () => {
+  it('saves the time zone at registration and in PATCH /stores/current', async () => {
+    const res = await http.post('/auth/register', { ...account, timezone: 'America/New_York' });
+    expect(res.status).toBe(201);
+    const token = res.body.token as string;
+    expect((await http.get('/stores/current', token)).body.timezone).toBe('America/New_York');
+
+    const patched = await http.patch('/stores/current', { timezone: 'Europe/Istanbul' }, token);
+    expect(patched.body.timezone).toBe('Europe/Istanbul');
+
+    expect((await http.patch('/stores/current', { timezone: 'Mars/Base' }, token)).status).toBe(
+      400,
+    );
+  });
+
+  it('accepts Turkish as the user language', async () => {
+    const res = await http.post('/auth/register', { ...account, locale: 'tr' });
+    expect(res.status).toBe(201);
+    expect(res.body.user.locale).toBe('tr');
+    expect(ctx.mailer.outbox.at(-1)?.subject).toContain('doğrulama');
+  });
+
+  it('a product can still be edited after the store categories changed', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food'] });
+    const created = await http.post(
+      '/products',
+      { name: 'Milk', sku: 'M-1', price: 2, subcategory: 'food.dairy' },
+      owner.token,
+    );
+    expect(created.status).toBe(201);
+
+    await http.patch('/stores/current', { main_categories: ['home'] }, owner.token);
+
+    const edited = await http.put(
+      `/products/${created.body.id}`,
+      { name: 'Milk 1L', sku: 'M-1', price: 2, subcategory: 'food.dairy' },
+      owner.token,
+    );
+    expect(edited.status).toBe(200);
+    expect(edited.body.subcategory).toBe('food.dairy');
+
+    const moved = await http.put(
+      `/products/${created.body.id}`,
+      { name: 'Milk 1L', sku: 'M-1', price: 2, subcategory: 'sports.fitness' },
+      owner.token,
+    );
+    expect(moved.status).toBe(400);
+  });
+});

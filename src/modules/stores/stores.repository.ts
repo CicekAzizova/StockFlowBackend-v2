@@ -64,6 +64,7 @@ export async function updateStore(
     country?: string | null;
     city?: string;
     onboarding_completed?: boolean;
+    timezone?: string;
   },
 ): Promise<StoreRecord | null> {
   const set = buildSetClause(fields, 2);

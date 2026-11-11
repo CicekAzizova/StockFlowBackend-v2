@@ -49,7 +49,7 @@ const envSchema = z.object({
   DEFAULT_TIMEZONE: z.string().default('Asia/Baku'),
 });
 
-export type Locale = 'az' | 'en' | 'ru';
+export type Locale = 'az' | 'en' | 'ru' | 'tr';
 
 export interface AppConfig {
   env: 'development' | 'test' | 'production';

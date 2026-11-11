@@ -168,7 +168,10 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
           const existing = await repo.findProductById(tx, storeId, id);
           if (!existing) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
 
-          await assertSubcategory(tx, storeId, body.subcategory);
+          // Dəyişməyibsə yoxlanmır: sahib mağaza kateqoriyalarını sonradan dəyişsə də köhnə məhsul redaktə oluna bilsin.
+          if (body.subcategory !== undefined && body.subcategory !== existing.subcategory) {
+            await assertSubcategory(tx, storeId, body.subcategory);
+          }
 
           const fields: Partial<ProductWrite> = {
             name: body.name,
