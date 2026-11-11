@@ -7,6 +7,7 @@ import {
   passwordSchema,
   phoneSchema,
   requiredString,
+  timezoneSchema,
 } from '../../shared/schemas.js';
 import { userDtoSchema } from '../users/users.dto.js';
 import { mainCategoriesSchema } from '../catalog/catalog.schemas.js';
@@ -25,6 +26,8 @@ export const registerBody = z.object({
   locale: localeSchema.default('az'),
   currency: z.enum(CURRENCIES, { error: 'Unsupported currency' }).default('USD'),
   main_categories: mainCategoriesSchema.default(['other']),
+  /** Telefonun saat qurşağı; verilməsə server default-u işlənir. */
+  timezone: timezoneSchema.optional(),
 });
 
 export const loginBody = z.object({

@@ -30,7 +30,21 @@ export const passwordSchema = z
   .min(MIN_PASSWORD_LENGTH, `Password must contain at least ${MIN_PASSWORD_LENGTH} characters`)
   .max(128, 'Password is too long');
 
-export const localeSchema = z.enum(['az', 'en', 'ru']);
+export const localeSchema = z.enum(['az', 'en', 'ru', 'tr']);
+
+/** IANA saat qurşağı (Asia/Baku, America/New_York...). */
+export const timezoneSchema = z
+  .string()
+  .trim()
+  .max(64)
+  .refine((value) => {
+    try {
+      new Intl.DateTimeFormat('en', { timeZone: value });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'Unknown time zone');
 
 export const idParams = z.object({
   id: z.coerce.number().int().positive({ error: 'Invalid id' }),

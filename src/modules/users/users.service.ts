@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { AppDeps, AuthContext } from '../../app-types.js';
 import { isUniqueViolation, queryMany, withTransaction } from '../../db/pool.js';
 import { keysForUrl, saveImage } from '../../infra/images.js';
+import type { Locale } from '../../config/env.js';
 import { badRequest, conflict, notFound, unauthorized } from '../../shared/errors.js';
 import { requireStoreId } from '../../shared/auth-helpers.js';
 import * as authRepo from '../auth/auth.repository.js';
@@ -49,7 +50,7 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
         name?: string | undefined;
         surname?: string | undefined;
         phone?: string | undefined;
-        locale?: 'az' | 'en' | 'ru' | undefined;
+        locale?: Locale | undefined;
       },
     ) {
       await requireUser(userId);
@@ -134,7 +135,7 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
         phone: string;
         email: string;
         password: string;
-        locale?: 'az' | 'en' | 'ru' | undefined;
+        locale?: Locale | undefined;
       },
     ) {
       const storeId = requireStoreId(auth);

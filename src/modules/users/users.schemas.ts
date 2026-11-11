@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   emailSchema,
   localeSchema,
+  timezoneSchema,
   optionalString,
   passwordSchema,
   phoneSchema,
@@ -65,6 +66,7 @@ export const updateStoreBody = z.object({
   country: countrySchema.nullable().optional(),
   city: optionalString(100).optional(),
   onboarding_completed: z.boolean().optional(),
+  timezone: timezoneSchema.optional(),
 });
 
 export const storeDto = z.object({

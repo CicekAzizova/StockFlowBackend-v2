@@ -50,6 +50,7 @@ export interface RegisterInput {
   locale: Locale;
   currency: string;
   main_categories: string[];
+  timezone?: string | undefined;
 }
 
 /** Ad verilməyibsə mağazaya müvəqqəti ad: "Çiçək's store". Sehrbazda dəyişdirilir. */
@@ -182,7 +183,7 @@ export function createAuthService(
             name: input.store_name || defaultStoreName(input.name),
             address: input.store_address,
             phone: input.store_phone ?? input.phone,
-            timezone: config.defaultTimezone,
+            timezone: input.timezone ?? config.defaultTimezone,
             currency: input.currency,
             main_categories: input.main_categories,
             // Mağaza məlumatı göndərilməyibsə sehrbaz sonradan tamamlayır.

@@ -20,6 +20,11 @@ const TEXTS: Record<Purpose, Record<Locale, { subject: string; intro: string; ou
       intro: 'Введите этот код в приложении, чтобы подтвердить адрес электронной почты:',
       outro: 'Код действителен 15 минут. Если вы не запрашивали его, проигнорируйте письмо.',
     },
+    tr: {
+      subject: 'StockFlow: e-posta doğrulama kodu',
+      intro: 'E-posta adresinizi doğrulamak için bu kodu uygulamaya girin:',
+      outro: 'Kod 15 dakika geçerlidir. Bu isteği siz yapmadıysanız bu e-postayı dikkate almayın.',
+    },
   },
   reset_password: {
     az: {
@@ -36,6 +41,11 @@ const TEXTS: Record<Purpose, Record<Locale, { subject: string; intro: string; ou
       subject: 'StockFlow: сброс пароля',
       intro: 'Введите этот код в приложении, чтобы сбросить пароль:',
       outro: 'Код действителен 15 минут. Если вы не запрашивали его, проигнорируйте письмо.',
+    },
+    tr: {
+      subject: 'StockFlow: şifre sıfırlama',
+      intro: 'Şifrenizi sıfırlamak için bu kodu uygulamaya girin:',
+      outro: 'Kod 15 dakika geçerlidir. Bu isteği siz yapmadıysanız bu e-postayı dikkate almayın.',
     },
   },
 };
