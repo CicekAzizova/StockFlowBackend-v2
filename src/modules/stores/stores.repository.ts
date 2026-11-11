@@ -15,13 +15,20 @@ const COLUMNS = 'id, owner_id, name, address, phone, timezone, currency, created
 
 export function insertStore(
   db: Queryable,
-  input: { ownerId: number; name: string; address: string; phone: string; timezone: string },
+  input: {
+    ownerId: number;
+    name: string;
+    address: string;
+    phone: string;
+    timezone: string;
+    currency: string;
+  },
 ): Promise<StoreRecord | null> {
   return queryOne<StoreRecord>(
     db,
-    `INSERT INTO stores (owner_id, name, address, phone, timezone)
-     VALUES ($1, $2, $3, $4, $5) RETURNING ${COLUMNS}`,
-    [input.ownerId, input.name, input.address, input.phone, input.timezone],
+    `INSERT INTO stores (owner_id, name, address, phone, timezone, currency)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${COLUMNS}`,
+    [input.ownerId, input.name, input.address, input.phone, input.timezone, input.currency],
   );
 }
 
