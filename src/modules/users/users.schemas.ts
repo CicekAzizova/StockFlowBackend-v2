@@ -49,12 +49,22 @@ export const deleteAccountBody = z.object({
 /** Dəstəklənən valyutalar (ISO 4217). Yeni valyuta əlavə etmək üçün yalnız bu siyahıya yazın. */
 export const CURRENCIES = ['AZN', 'USD', 'EUR', 'TRY', 'RUB', 'GBP'] as const;
 
+/** ISO 3166-1 alpha-2 ölkə kodu (AZ, US, TR...). */
+export const countrySchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{2}$/, 'Country must be a 2-letter ISO code');
+
 export const updateStoreBody = z.object({
   name: requiredString(120).optional(),
   address: requiredString(250).optional(),
   phone: phoneSchema.optional(),
   currency: z.enum(CURRENCIES, { error: 'Unsupported currency' }).optional(),
   main_categories: mainCategoriesSchema.optional(),
+  country: countrySchema.nullable().optional(),
+  city: optionalString(100).optional(),
+  onboarding_completed: z.boolean().optional(),
 });
 
 export const storeDto = z.object({
@@ -65,4 +75,7 @@ export const storeDto = z.object({
   timezone: z.string(),
   currency: z.string(),
   main_categories: z.array(z.string()),
+  country: z.string().nullable(),
+  city: z.string(),
+  onboarding_completed: z.boolean(),
 });

@@ -18,9 +18,10 @@ export const registerBody = z.object({
   email: emailSchema,
   password: passwordSchema,
   phone: phoneSchema,
-  store_name: requiredString(120),
-  store_address: requiredString(250),
-  store_phone: phoneSchema,
+  // Mağaza məlumatı artıq qeydiyyat sehrbazında (PATCH /stores/current) tamamlanır; köhnə tətbiq hələ göndərə bilər.
+  store_name: optionalString(120).default(''),
+  store_address: optionalString(250).default(''),
+  store_phone: phoneSchema.optional(),
   locale: localeSchema.default('az'),
   currency: z.enum(CURRENCIES, { error: 'Unsupported currency' }).default('USD'),
   main_categories: mainCategoriesSchema.default(['other']),

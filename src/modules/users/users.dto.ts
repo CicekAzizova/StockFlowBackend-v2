@@ -23,6 +23,9 @@ export const userDtoSchema = z.object({
   avatar_thumbnail_url: z.string().nullable(),
   locale: localeSchema,
   email_verified: z.boolean(),
+  onboarding_completed: z
+    .boolean()
+    .describe('false: the owner has not finished the store setup wizard yet'),
 });
 
 export type UserDto = z.infer<typeof userDtoSchema>;
@@ -44,6 +47,7 @@ export function toUserDto(user: UserWithStore, storage: Storage): UserDto {
     avatar_thumbnail_url: user.avatar_url ? thumbnailUrlFor(storage, user.avatar_url) : null,
     locale: user.locale,
     email_verified: user.email_verified_at !== null,
+    onboarding_completed: user.store_onboarding_completed ?? true,
   };
 }
 
