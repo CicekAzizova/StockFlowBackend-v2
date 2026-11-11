@@ -9,11 +9,14 @@ export interface StoreRecord {
   timezone: string;
   currency: string;
   main_categories: string[];
+  country: string | null;
+  city: string;
+  onboarding_completed: boolean;
   created_at: Date;
 }
 
 const COLUMNS =
-  'id, owner_id, name, address, phone, timezone, currency, main_categories, created_at';
+  'id, owner_id, name, address, phone, timezone, currency, main_categories, country, city, onboarding_completed, created_at';
 
 export function insertStore(
   db: Queryable,
@@ -25,12 +28,13 @@ export function insertStore(
     timezone: string;
     currency: string;
     main_categories: string[];
+    onboarding_completed: boolean;
   },
 ): Promise<StoreRecord | null> {
   return queryOne<StoreRecord>(
     db,
-    `INSERT INTO stores (owner_id, name, address, phone, timezone, currency, main_categories)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${COLUMNS}`,
+    `INSERT INTO stores (owner_id, name, address, phone, timezone, currency, main_categories, onboarding_completed)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${COLUMNS}`,
     [
       input.ownerId,
       input.name,
@@ -39,6 +43,7 @@ export function insertStore(
       input.timezone,
       input.currency,
       input.main_categories,
+      input.onboarding_completed,
     ],
   );
 }
@@ -56,6 +61,9 @@ export async function updateStore(
     phone?: string;
     currency?: string;
     main_categories?: string[];
+    country?: string | null;
+    city?: string;
+    onboarding_completed?: boolean;
   },
 ): Promise<StoreRecord | null> {
   const set = buildSetClause(fields, 2);

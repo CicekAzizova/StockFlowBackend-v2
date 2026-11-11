@@ -18,6 +18,9 @@ export const storeRoutes: FastifyPluginAsyncZod = async (app) => {
     timezone: store.timezone,
     currency: store.currency,
     main_categories: store.main_categories,
+    country: store.country,
+    city: store.city,
+    onboarding_completed: store.onboarding_completed,
   });
 
   app.get(

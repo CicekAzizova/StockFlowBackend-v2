@@ -46,11 +46,14 @@ export interface RegisterInput {
   phone: string;
   store_name: string;
   store_address: string;
-  store_phone: string;
+  store_phone?: string | undefined;
   locale: Locale;
   currency: string;
   main_categories: string[];
 }
+
+/** Ad verilməyibsə mağazaya müvəqqəti ad: "Çiçək's store". Sehrbazda dəyişdirilir. */
+const defaultStoreName = (ownerName: string) => `${ownerName}'s store`.slice(0, 120);
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -176,12 +179,14 @@ export function createAuthService(
           });
           const store = await stores.insertStore(tx, {
             ownerId,
-            name: input.store_name,
+            name: input.store_name || defaultStoreName(input.name),
             address: input.store_address,
-            phone: input.store_phone,
+            phone: input.store_phone ?? input.phone,
             timezone: config.defaultTimezone,
             currency: input.currency,
             main_categories: input.main_categories,
+            // Mağaza məlumatı göndərilməyibsə sehrbaz sonradan tamamlayır.
+            onboarding_completed: input.store_name !== '',
           });
           if (!store) throw new Error('Failed to insert store');
           await subscriptions.createFreeSubscription(tx, ownerId, config.freeProductLimit);
