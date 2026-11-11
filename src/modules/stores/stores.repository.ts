@@ -8,10 +8,12 @@ export interface StoreRecord {
   phone: string;
   timezone: string;
   currency: string;
+  main_categories: string[];
   created_at: Date;
 }
 
-const COLUMNS = 'id, owner_id, name, address, phone, timezone, currency, created_at';
+const COLUMNS =
+  'id, owner_id, name, address, phone, timezone, currency, main_categories, created_at';
 
 export function insertStore(
   db: Queryable,
@@ -22,13 +24,22 @@ export function insertStore(
     phone: string;
     timezone: string;
     currency: string;
+    main_categories: string[];
   },
 ): Promise<StoreRecord | null> {
   return queryOne<StoreRecord>(
     db,
-    `INSERT INTO stores (owner_id, name, address, phone, timezone, currency)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING ${COLUMNS}`,
-    [input.ownerId, input.name, input.address, input.phone, input.timezone, input.currency],
+    `INSERT INTO stores (owner_id, name, address, phone, timezone, currency, main_categories)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${COLUMNS}`,
+    [
+      input.ownerId,
+      input.name,
+      input.address,
+      input.phone,
+      input.timezone,
+      input.currency,
+      input.main_categories,
+    ],
   );
 }
 
@@ -39,7 +50,13 @@ export function findStoreById(db: Queryable, id: number): Promise<StoreRecord | 
 export async function updateStore(
   db: Queryable,
   id: number,
-  fields: { name?: string; address?: string; phone?: string; currency?: string },
+  fields: {
+    name?: string;
+    address?: string;
+    phone?: string;
+    currency?: string;
+    main_categories?: string[];
+  },
 ): Promise<StoreRecord | null> {
   const set = buildSetClause(fields, 2);
   if (set.sql === '') return findStoreById(db, id);
