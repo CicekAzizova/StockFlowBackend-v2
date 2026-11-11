@@ -9,6 +9,7 @@ import {
   requiredString,
 } from '../../shared/schemas.js';
 import { userDtoSchema } from '../users/users.dto.js';
+import { CURRENCIES } from '../users/users.schemas.js';
 
 export const registerBody = z.object({
   name: requiredString(100),
@@ -20,6 +21,7 @@ export const registerBody = z.object({
   store_address: requiredString(250),
   store_phone: phoneSchema,
   locale: localeSchema.default('az'),
+  currency: z.enum(CURRENCIES, { error: 'Unsupported currency' }).default('USD'),
 });
 
 export const loginBody = z.object({

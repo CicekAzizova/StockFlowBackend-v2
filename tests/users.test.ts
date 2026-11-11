@@ -83,6 +83,28 @@ describe('store currency', () => {
     expect((await http.get('/users/me', seller.token)).body.currency).toBe('EUR');
   });
 
+  it('lets the owner pick the currency when registering', async () => {
+    const eur = await registerOwner(ctx, { currency: 'EUR' });
+    expect((await http.get('/users/me', eur.token)).body.currency).toBe('EUR');
+    expect((await http.get('/stores/current', eur.token)).body.currency).toBe('EUR');
+
+    // Seçilməyibsə standart USD.
+    const plain = await registerOwner(ctx);
+    expect((await http.get('/users/me', plain.token)).body.currency).toBe('USD');
+
+    const bad = await http.post('/auth/register', {
+      name: 'Owner',
+      email: 'bad-currency@test.com',
+      password: 'secret123',
+      phone: '+994501234567',
+      store_name: 'Test Store',
+      store_address: 'Baku',
+      store_phone: '+994121234567',
+      currency: 'XXX',
+    });
+    expect(bad.status).toBe(400);
+  });
+
   it('rejects unsupported currencies and non-owners', async () => {
     const owner = await registerOwner(ctx);
     const seller = await createAssociate(ctx, owner);
