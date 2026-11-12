@@ -1,15 +1,12 @@
 import { z } from 'zod';
 import { MAIN_CATEGORY_CODES } from './catalog.data.js';
 
-export const MAX_MAIN_CATEGORIES = 5;
-
-/** Mağazanın əsas kateqoriyaları: 1-dən 5-ə qədər, təkrarsız. */
+/** Mağazanın əsas kateqoriyaları: ən azı biri, təkrarsız (yuxarı limit yoxdur, hamısı seçilə bilər). */
 export const mainCategoriesSchema = z
   .array(z.enum(MAIN_CATEGORY_CODES, { error: 'Unsupported category' }), {
     error: 'Categories must be a list',
   })
   .min(1, 'Choose at least one category')
-  .max(MAX_MAIN_CATEGORIES, `Choose at most ${MAX_MAIN_CATEGORIES} categories`)
   .refine((codes) => new Set(codes).size === codes.length, 'Categories must not repeat');
 
 const namesDto = z.object({
