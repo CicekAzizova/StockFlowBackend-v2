@@ -76,14 +76,9 @@ describe('store categories', () => {
     expect(patched.body.main_categories).toEqual(['clothing', 'sports', 'kids']);
   });
 
-  it('rejects unknown, repeated, empty and too many categories', async () => {
+  it('rejects unknown, repeated and empty categories', async () => {
     const owner = await registerOwner(ctx);
-    for (const bad of [
-      ['nope'],
-      ['food', 'food'],
-      [],
-      ['food', 'clothing', 'home', 'beauty', 'kids', 'books'],
-    ]) {
+    for (const bad of [['nope'], ['food', 'food'], []]) {
       expect(
         (await http.patch('/stores/current', { main_categories: bad }, owner.token)).status,
       ).toBe(400);
@@ -91,6 +86,17 @@ describe('store categories', () => {
     expect((await http.get('/stores/current', owner.token)).body.main_categories).toEqual([
       'other',
     ]);
+  });
+
+  it('accepts any number of categories, up to all of them', async () => {
+    const owner = await registerOwner(ctx);
+    const res = await http.patch(
+      '/stores/current',
+      { main_categories: [...MAIN_CATEGORY_CODES] },
+      owner.token,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.main_categories).toEqual([...MAIN_CATEGORY_CODES]);
   });
 
   it('only the owner can change the categories', async () => {
