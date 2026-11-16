@@ -9,6 +9,12 @@ export const mainCategoriesSchema = z
   .min(1, 'Choose at least one category')
   .refine((codes) => new Set(codes).size === codes.length, 'Categories must not repeat');
 
+/** Mağazanın alt kateqoriyaları: təkrarsız kataloq kodları (boş ola bilər). Əsas kateqoriyaya aid olması marşrutda yoxlanılır. */
+export const subcategoriesSchema = z
+  .array(z.string().trim().min(1).max(64), { error: 'Subcategories must be a list' })
+  .max(300)
+  .refine((codes) => new Set(codes).size === codes.length, 'Subcategories must not repeat');
+
 const namesDto = z.object({
   en: z.string(),
   az: z.string(),

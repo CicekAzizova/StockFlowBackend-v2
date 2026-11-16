@@ -8,7 +8,7 @@ import {
   phoneSchema,
   requiredString,
 } from '../../shared/schemas.js';
-import { mainCategoriesSchema } from '../catalog/catalog.schemas.js';
+import { mainCategoriesSchema, subcategoriesSchema } from '../catalog/catalog.schemas.js';
 
 const finSchema = z
   .string({ error: 'All fields are required' })
@@ -63,6 +63,7 @@ export const updateStoreBody = z.object({
   phone: phoneSchema.optional(),
   currency: z.enum(CURRENCIES, { error: 'Unsupported currency' }).optional(),
   main_categories: mainCategoriesSchema.optional(),
+  subcategories: subcategoriesSchema.optional(),
   country: countrySchema.nullable().optional(),
   city: optionalString(100).optional(),
   onboarding_completed: z.boolean().optional(),
@@ -77,6 +78,7 @@ export const storeDto = z.object({
   timezone: z.string(),
   currency: z.string(),
   main_categories: z.array(z.string()),
+  subcategories: z.array(z.string()),
   country: z.string().nullable(),
   city: z.string(),
   onboarding_completed: z.boolean(),
