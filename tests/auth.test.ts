@@ -390,6 +390,28 @@ describe('password reset', () => {
   });
 });
 
+describe('password reset for sellers', () => {
+  it('sends no code to a seller and cannot reset a seller password', async () => {
+    const owner = await registerOwner(ctx, { email: 'boss@test.com' });
+    const seller = await createAssociate(ctx, owner, { email: 'seller-reset@test.com' });
+    ctx.mailer.outbox.length = 0;
+
+    const requested = await http.post('/auth/forgot-password', { email: seller.email });
+    expect(requested.status).toBe(200);
+    expect(ctx.mailer.outbox).toHaveLength(0);
+
+    const reset = await http.post('/auth/reset-password', {
+      email: seller.email,
+      code: '123456',
+      new_password: 'hacked123',
+    });
+    expect(reset.status).toBe(400);
+
+    const login = await http.post('/auth/login', { email: seller.email, password: 'seller123' });
+    expect(login.status).toBe(200);
+  });
+});
+
 describe('change password', () => {
   it('needs the current password, logs out other devices and returns a fresh session', async () => {
     const owner = await registerOwner(ctx, { email: 'change@test.com', password: 'oldpass1' });

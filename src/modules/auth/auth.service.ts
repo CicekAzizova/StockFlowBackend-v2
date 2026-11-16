@@ -287,15 +287,18 @@ export function createAuthService(
       }
     },
 
-    /** Həmişə uğurlu görünür ki, kimin qeydiyyatda olduğu bilinməsin. */
+    /**
+     * Həmişə uğurlu görünür ki, kimin qeydiyyatda olduğu bilinməsin.
+     * Kod yalnız mağaza sahibinə göndərilir. Satıcının şifrəsini sahib dəyişir.
+     */
     async forgotPassword(email: string): Promise<void> {
       const user = await users.findActiveByEmail(pool, email);
-      if (user) await issueCode(user, 'reset_password');
+      if (user?.role === 'OWNER') await issueCode(user, 'reset_password');
     },
 
     async resetPassword(email: string, code: string, newPassword: string): Promise<void> {
       const user = await users.findActiveByEmail(pool, email);
-      if (!user) {
+      if (!user || user.role !== 'OWNER') {
         await verifyAgainstDummy(code);
         throw badRequest('INVALID_CODE', 'Invalid or expired code');
       }

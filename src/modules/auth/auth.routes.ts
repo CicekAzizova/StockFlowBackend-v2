@@ -177,7 +177,8 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: {
         tags: ['Auth'],
         summary: 'Email a password reset code',
-        description: 'Always answers 200, whether or not the email is registered.',
+        description:
+          'Always answers 200, whether or not the email is registered. Only store owners receive a code; sellers get their password changed by the owner.',
         body: forgotPasswordBody,
         response: { 200: messageResponse },
       },
