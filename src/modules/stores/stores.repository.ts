@@ -9,6 +9,7 @@ export interface StoreRecord {
   timezone: string;
   currency: string;
   main_categories: string[];
+  subcategories: string[];
   country: string | null;
   city: string;
   onboarding_completed: boolean;
@@ -16,7 +17,7 @@ export interface StoreRecord {
 }
 
 const COLUMNS =
-  'id, owner_id, name, address, phone, timezone, currency, main_categories, country, city, onboarding_completed, created_at';
+  'id, owner_id, name, address, phone, timezone, currency, main_categories, subcategories, country, city, onboarding_completed, created_at';
 
 export function insertStore(
   db: Queryable,
@@ -61,6 +62,7 @@ export async function updateStore(
     phone?: string;
     currency?: string;
     main_categories?: string[];
+    subcategories?: string[];
     country?: string | null;
     city?: string;
     onboarding_completed?: boolean;

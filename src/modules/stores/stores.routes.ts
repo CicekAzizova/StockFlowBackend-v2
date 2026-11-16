@@ -1,5 +1,6 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { notFound } from '../../shared/errors.js';
+import { badRequest, notFound } from '../../shared/errors.js';
+import { isSubcategoryOfAny } from '../catalog/catalog.data.js';
 import { requireStoreId } from '../../shared/auth-helpers.js';
 import { storeDto, updateStoreBody } from '../users/users.schemas.js';
 import * as repo from './stores.repository.js';
@@ -18,6 +19,7 @@ export const storeRoutes: FastifyPluginAsyncZod = async (app) => {
     timezone: store.timezone,
     currency: store.currency,
     main_categories: store.main_categories,
+    subcategories: store.subcategories,
     country: store.country,
     city: store.city,
     onboarding_completed: store.onboarding_completed,
@@ -53,7 +55,26 @@ export const storeRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => {
-      const store = await repo.updateStore(pool, requireStoreId(request.auth), request.body);
+      const storeId = requireStoreId(request.auth);
+      const current = await repo.findStoreById(pool, storeId);
+      if (!current) throw notFound('STORE_NOT_FOUND', 'Store not found');
+
+      const fields = { ...request.body };
+      const mains = fields.main_categories ?? current.main_categories;
+      if (fields.subcategories !== undefined) {
+        if (!fields.subcategories.every((code) => isSubcategoryOfAny(code, mains))) {
+          throw badRequest(
+            'INVALID_SUBCATEGORY',
+            'Subcategory does not belong to the categories of this store',
+          );
+        }
+      } else if (fields.main_categories !== undefined) {
+        // Əsas kateqoriya götürüləndə ona aid alt kateqoriyalar da siyahıdan çıxır.
+        const kept = current.subcategories.filter((code) => isSubcategoryOfAny(code, mains));
+        if (kept.length !== current.subcategories.length) fields.subcategories = kept;
+      }
+
+      const store = await repo.updateStore(pool, storeId, fields);
       if (!store) throw notFound('STORE_NOT_FOUND', 'Store not found');
       return toDto(store);
     },

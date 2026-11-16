@@ -161,3 +161,44 @@ describe('product subcategory', () => {
     expect(cleared.body.subcategory).toBeNull();
   });
 });
+
+describe('store subcategories', () => {
+  it('starts empty, saves catalog subcategories and returns them in the store and profile', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food', 'home'] });
+    expect((await http.get('/stores/current', owner.token)).body.subcategories).toEqual([]);
+
+    const patched = await http.patch(
+      '/stores/current',
+      { subcategories: ['food.dairy', 'food.drinks'] },
+      owner.token,
+    );
+    expect(patched.status).toBe(200);
+    expect(patched.body.subcategories).toEqual(['food.dairy', 'food.drinks']);
+    expect((await http.get('/users/me', owner.token)).body.subcategories).toEqual([
+      'food.dairy',
+      'food.drinks',
+    ]);
+  });
+
+  it('rejects unknown, repeated and foreign subcategories', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food'] });
+    for (const bad of [['nope'], ['food.dairy', 'food.dairy'], ['clothing.other']]) {
+      expect(
+        (await http.patch('/stores/current', { subcategories: bad }, owner.token)).status,
+      ).toBe(400);
+    }
+    expect((await http.get('/stores/current', owner.token)).body.subcategories).toEqual([]);
+  });
+
+  it('drops subcategories of a main category that is removed', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food', 'home'] });
+    await http.patch(
+      '/stores/current',
+      { subcategories: ['food.dairy', 'food.drinks'] },
+      owner.token,
+    );
+    const patched = await http.patch('/stores/current', { main_categories: ['home'] }, owner.token);
+    expect(patched.status).toBe(200);
+    expect(patched.body.subcategories).toEqual([]);
+  });
+});

@@ -19,6 +19,9 @@ export const userDtoSchema = z.object({
   store_name: z.string().nullable(),
   currency: z.string().describe('Store currency (ISO 4217), USD if there is no store'),
   main_categories: z.array(z.string()).describe('Store categories (catalog codes)'),
+  subcategories: z
+    .array(z.string())
+    .describe('Subcategories the store works with (catalog codes); empty means all of them'),
   avatar_url: z.string().nullable(),
   avatar_thumbnail_url: z.string().nullable(),
   locale: localeSchema,
@@ -43,6 +46,7 @@ export function toUserDto(user: UserWithStore, storage: Storage): UserDto {
     store_name: user.store_name,
     currency: user.store_currency ?? 'USD',
     main_categories: user.store_main_categories ?? ['other'],
+    subcategories: user.store_subcategories ?? [],
     avatar_url: user.avatar_url,
     avatar_thumbnail_url: user.avatar_url ? thumbnailUrlFor(storage, user.avatar_url) : null,
     locale: user.locale,
