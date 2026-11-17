@@ -18,6 +18,7 @@ import {
   tooManyRequests,
   unauthorized,
 } from '../../shared/errors.js';
+import * as locations from '../locations/locations.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as subscriptions from '../subscriptions/subscriptions.repository.js';
 import * as users from '../users/users.repository.js';
@@ -190,6 +191,13 @@ export function createAuthService(
             onboarding_completed: input.store_name !== '',
           });
           if (!store) throw new Error('Failed to insert store');
+          await locations.insertLocation(tx, {
+            storeId: store.id,
+            name: store.name,
+            kind: 'store',
+            address: store.address,
+            isMain: true,
+          });
           await subscriptions.createFreeSubscription(tx, ownerId, config.freeProductLimit);
           return { ownerId, store };
         }));

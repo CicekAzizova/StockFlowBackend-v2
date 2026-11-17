@@ -1,7 +1,9 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { withTransaction } from '../../db/pool.js';
 import { badRequest, notFound } from '../../shared/errors.js';
 import { requireStoreId } from '../../shared/auth-helpers.js';
 import { storeDto, updateStoreBody } from '../users/users.schemas.js';
+import * as locations from '../locations/locations.repository.js';
 import * as repo from './stores.repository.js';
 import { isAllowedSubcategory, resolveCustomSubcategories } from './store-subcategories.js';
 
@@ -96,7 +98,19 @@ export const storeRoutes: FastifyPluginAsyncZod = async (app) => {
         update.subcategories = [...selected, ...created];
       }
 
-      const store = await repo.updateStore(pool, storeId, update);
+      const store = await withTransaction(pool, async (tx) => {
+        const updated = await repo.updateStore(tx, storeId, update);
+        if (updated) {
+          // Əsas məkan mağazanın adını və ünvanını izləyir (sahib onu ayrıca dəyişməyibsə).
+          await locations.syncMainWithStore(
+            tx,
+            storeId,
+            { name: current.name, address: current.address },
+            { name: update.name, address: update.address },
+          );
+        }
+        return updated;
+      });
       if (!store) throw notFound('STORE_NOT_FOUND', 'Store not found');
       return toDto(store);
     },
