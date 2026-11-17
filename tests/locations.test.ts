@@ -178,3 +178,44 @@ describe('locations', () => {
     expect((await http.get('/locations', owner.token)).body[0]).toMatchObject({ name: 'HQ' });
   });
 });
+
+describe('deleting locations', () => {
+  it('deletes a non-main location and frees its name', async () => {
+    const owner = await registerOwner(ctx, { store_name: 'Main' });
+    const branch = await http.post('/locations', { name: 'Yasamal' }, owner.token);
+
+    const res = await http.delete(`/locations/${branch.body.id}`, owner.token);
+    expect(res.status).toBe(200);
+    expect((await http.get('/locations', owner.token)).body).toHaveLength(1);
+
+    const again = await http.post('/locations', { name: 'Yasamal' }, owner.token);
+    expect(again.status).toBe(201);
+  });
+
+  it('refuses to delete the main location until another one is main', async () => {
+    const owner = await registerOwner(ctx, { store_name: 'Main' });
+    const main = (await http.get('/locations', owner.token)).body[0] as { id: number };
+    const branch = await http.post('/locations', { name: 'Yasamal' }, owner.token);
+
+    const refused = await http.delete(`/locations/${main.id}`, owner.token);
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe('CANNOT_DELETE_MAIN_LOCATION');
+
+    await http.patch(`/locations/${branch.body.id}`, { is_main: true }, owner.token);
+    expect((await http.delete(`/locations/${main.id}`, owner.token)).status).toBe(200);
+    const list = (await http.get('/locations', owner.token)).body as { name: string }[];
+    expect(list.map((l) => l.name)).toEqual(['Yasamal']);
+  });
+
+  it('is limited to the owner of the store', async () => {
+    const owner = await registerOwner(ctx);
+    const stranger = await registerOwner(ctx);
+    const branch = await http.post('/locations', { name: 'Yasamal' }, owner.token);
+
+    expect((await http.delete(`/locations/${branch.body.id}`, stranger.token)).status).toBe(404);
+    const seller = await createAssociate(ctx, owner);
+    expect((await http.delete(`/locations/${branch.body.id}`, seller.token)).status).toBe(403);
+    expect((await http.delete('/locations/999999', owner.token)).status).toBe(404);
+    expect((await http.get('/locations', owner.token)).body).toHaveLength(2);
+  });
+});

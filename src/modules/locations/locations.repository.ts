@@ -121,3 +121,11 @@ export async function syncMainWithStore(
     );
   }
 }
+
+/** Əsas olmayan məkanı silir (əsas məkanın silinməsinə marşrutda icazə verilmir). */
+export function deleteLocation(db: Queryable, storeId: number, id: number): Promise<number> {
+  return execute(db, 'DELETE FROM locations WHERE id = $1 AND store_id = $2 AND NOT is_main', [
+    id,
+    storeId,
+  ]);
+}
