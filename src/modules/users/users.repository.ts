@@ -1,6 +1,7 @@
 import type { Role } from '../../app-types.js';
 import type { Locale } from '../../config/env.js';
 import { buildSetClause, execute, queryMany, queryOne, type Queryable } from '../../db/pool.js';
+import type { CustomSubcategory } from '../stores/store-subcategories.js';
 
 export interface UserRecord {
   id: number;
@@ -30,6 +31,8 @@ export interface UserWithStore extends UserRecord {
   store_main_categories: string[] | null;
   /** Mağazanın seçdiyi alt kateqoriyalar; mağazası olmayan istifadəçidə null. */
   store_subcategories: string[] | null;
+  /** Mağazanın öz alt kateqoriyaları; mağazası olmayan istifadəçidə null. */
+  store_custom_subcategories: CustomSubcategory[] | null;
   /** Mağazanın qeydiyyat sehrbazı bitibmi; mağazası olmayan istifadəçidə null. */
   store_onboarding_completed: boolean | null;
 }
@@ -57,10 +60,11 @@ const WITH_STORE = `
   SELECT u.*, s.id AS effective_store_id, s.name AS store_name, s.currency AS store_currency,
          s.main_categories AS store_main_categories,
          s.subcategories AS store_subcategories,
+         s.custom_subcategories AS store_custom_subcategories,
          s.onboarding_completed AS store_onboarding_completed
   FROM users u
   LEFT JOIN LATERAL (
-    SELECT st.id, st.name, st.currency, st.main_categories, st.subcategories, st.onboarding_completed FROM stores st
+    SELECT st.id, st.name, st.currency, st.main_categories, st.subcategories, st.custom_subcategories, st.onboarding_completed FROM stores st
     WHERE (u.role = 'SALES_ASSOCIATE' AND st.id = u.store_id)
        OR (u.role = 'OWNER' AND st.owner_id = u.id)
     ORDER BY st.id

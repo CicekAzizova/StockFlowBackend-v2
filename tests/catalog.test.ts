@@ -202,3 +202,106 @@ describe('store subcategories', () => {
     expect(patched.body.subcategories).toEqual([]);
   });
 });
+
+describe('custom subcategories', () => {
+  const coffee = { main: 'food', name: 'Qəhvə' };
+
+  it('creates a code for a new one and returns it in the store and profile', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food'] });
+    const res = await http.patch(
+      '/stores/current',
+      { custom_subcategories: [coffee] },
+      owner.token,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.custom_subcategories).toHaveLength(1);
+    expect(res.body.custom_subcategories[0]).toMatchObject({ main: 'food', name: 'Qəhvə' });
+    expect(res.body.custom_subcategories[0].code).toMatch(/^food\.c_[0-9a-f]{8}$/);
+    // Seçilmiş siyahı boş idi: "hamısı" qalır, yalnız yenisi seçilmir.
+    expect(res.body.subcategories).toEqual([]);
+    expect((await http.get('/users/me', owner.token)).body.custom_subcategories).toEqual(
+      res.body.custom_subcategories,
+    );
+  });
+
+  it('selects the new one when the store already narrows its subcategories', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food'] });
+    await http.patch('/stores/current', { subcategories: ['food.dairy'] }, owner.token);
+    const res = await http.patch(
+      '/stores/current',
+      { custom_subcategories: [coffee] },
+      owner.token,
+    );
+    const code = res.body.custom_subcategories[0].code as string;
+    expect(res.body.subcategories).toEqual(['food.dairy', code]);
+  });
+
+  it('keeps the code when renaming and drops the ones that are left out', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food'] });
+    const first = await http.patch(
+      '/stores/current',
+      { custom_subcategories: [coffee, { main: 'food', name: 'Çay' }] },
+      owner.token,
+    );
+    const [kept, removed] = first.body.custom_subcategories as { code: string }[];
+    await http.patch(
+      '/stores/current',
+      { subcategories: [kept!.code, removed!.code] },
+      owner.token,
+    );
+
+    const res = await http.patch(
+      '/stores/current',
+      { custom_subcategories: [{ code: kept!.code, main: 'food', name: 'Espresso' }] },
+      owner.token,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.custom_subcategories).toEqual([
+      { code: kept!.code, main: 'food', name: 'Espresso' },
+    ]);
+    expect(res.body.subcategories).toEqual([kept!.code]);
+  });
+
+  it('rejects duplicates, a main category the store does not have and unknown codes', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food'] });
+    const bad = [
+      [coffee, { main: 'food', name: 'qəhvə' }],
+      [{ main: 'home', name: 'Lampa' }],
+      [{ code: 'food.c_00000000', main: 'food', name: 'Yox' }],
+      [{ main: 'food', name: '   ' }],
+    ];
+    for (const list of bad) {
+      expect(
+        (await http.patch('/stores/current', { custom_subcategories: list }, owner.token)).status,
+      ).toBe(400);
+    }
+    expect((await http.get('/stores/current', owner.token)).body.custom_subcategories).toEqual([]);
+  });
+
+  it('drops them when their main category is removed', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food', 'home'] });
+    await http.patch('/stores/current', { custom_subcategories: [coffee] }, owner.token);
+    const res = await http.patch('/stores/current', { main_categories: ['home'] }, owner.token);
+    expect(res.body.custom_subcategories).toEqual([]);
+  });
+
+  it('can be used as a product subcategory, but not by another store', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food'] });
+    const stranger = await registerOwner(ctx, { main_categories: ['food'] });
+    const res = await http.patch(
+      '/stores/current',
+      { custom_subcategories: [coffee] },
+      owner.token,
+    );
+    const code = res.body.custom_subcategories[0].code as string;
+
+    const product = await createProduct(ctx, owner, { subcategory: code });
+    expect(product).toMatchObject({ subcategory: code });
+    const rejected = await http.post(
+      '/products',
+      { name: 'X', sku: 'CUSTOM-X', price: 1, subcategory: code },
+      stranger.token,
+    );
+    expect(rejected.status).toBe(400);
+  });
+});
