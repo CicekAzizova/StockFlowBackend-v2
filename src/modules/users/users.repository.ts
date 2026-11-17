@@ -13,6 +13,8 @@ export interface UserRecord {
   fin: string | null;
   password_hash: string;
   store_id: number | null;
+  /** Satıcının təyin olunmuş məkanı; null: əsas məkan. */
+  location_id: number | null;
   avatar_url: string | null;
   locale: Locale;
   email_verified_at: Date | null;
@@ -35,6 +37,9 @@ export interface UserWithStore extends UserRecord {
   store_custom_subcategories: CustomSubcategory[] | null;
   /** Mağazanın qeydiyyat sehrbazı bitibmi; mağazası olmayan istifadəçidə null. */
   store_onboarding_completed: boolean | null;
+  /** Satıcının faktiki məkanı (təyin olunmayıbsa əsas məkan). Sahib üçün null. */
+  seller_location_id: number | null;
+  seller_location_name: string | null;
 }
 
 export interface AssociateRow {
@@ -46,6 +51,9 @@ export interface AssociateRow {
   phone: string;
   role: Role;
   store_id: number;
+  /** Faktiki məkan (təyin olunmayıbsa əsas məkan). */
+  location_id: number | null;
+  location_name: string | null;
   avatar_url: string | null;
   is_active: boolean;
   last_active_at: Date | null;
@@ -61,7 +69,8 @@ const WITH_STORE = `
          s.main_categories AS store_main_categories,
          s.subcategories AS store_subcategories,
          s.custom_subcategories AS store_custom_subcategories,
-         s.onboarding_completed AS store_onboarding_completed
+         s.onboarding_completed AS store_onboarding_completed,
+         sl.id AS seller_location_id, sl.name AS seller_location_name
   FROM users u
   LEFT JOIN LATERAL (
     SELECT st.id, st.name, st.currency, st.main_categories, st.subcategories, st.custom_subcategories, st.onboarding_completed FROM stores st
@@ -69,7 +78,14 @@ const WITH_STORE = `
        OR (u.role = 'OWNER' AND st.owner_id = u.id)
     ORDER BY st.id
     LIMIT 1
-  ) s ON true`;
+  ) s ON true
+  LEFT JOIN LATERAL (
+    SELECT l.id, l.name FROM locations l
+    WHERE u.role = 'SALES_ASSOCIATE' AND l.store_id = u.store_id
+      AND (l.id = u.location_id OR (u.location_id IS NULL AND l.is_main))
+    ORDER BY (l.id = u.location_id) DESC
+    LIMIT 1
+  ) sl ON true`;
 
 export function findActiveByEmail(db: Queryable, email: string): Promise<UserWithStore | null> {
   return queryOne<UserWithStore>(db, `${WITH_STORE} WHERE u.email = $1 AND u.deleted_at IS NULL`, [
@@ -115,13 +131,14 @@ export async function insertAssociate(
     fin: string;
     passwordHash: string;
     storeId: number;
+    locationId: number | null;
     locale: Locale;
   },
 ): Promise<number> {
   const row = await queryOne<{ id: number }>(
     db,
-    `INSERT INTO users (role, name, surname, email, phone, fin, password_hash, store_id, locale, email_verified_at)
-     VALUES ('SALES_ASSOCIATE', $1, $2, $3, $4, $5, $6, $7, $8, now()) RETURNING id`,
+    `INSERT INTO users (role, name, surname, email, phone, fin, password_hash, store_id, location_id, locale, email_verified_at)
+     VALUES ('SALES_ASSOCIATE', $1, $2, $3, $4, $5, $6, $7, $9, $8, now()) RETURNING id`,
     [
       input.name,
       input.surname,
@@ -131,6 +148,7 @@ export async function insertAssociate(
       input.passwordHash,
       input.storeId,
       input.locale,
+      input.locationId,
     ],
   );
   if (!row) throw new Error('Failed to insert associate');
@@ -141,7 +159,10 @@ export async function updateUser(
   db: Queryable,
   id: number,
   fields: Partial<
-    Pick<UserRecord, 'name' | 'surname' | 'phone' | 'email' | 'fin' | 'locale' | 'avatar_url'>
+    Pick<
+      UserRecord,
+      'name' | 'surname' | 'phone' | 'email' | 'fin' | 'locale' | 'avatar_url' | 'location_id'
+    >
   >,
 ): Promise<void> {
   const set = buildSetClause(fields, 2);
@@ -193,7 +214,7 @@ export function listAssociates(
   return queryMany<AssociateRow>(
     db,
     `SELECT u.id, u.name, u.surname, u.fin, u.email, u.phone, u.role, u.store_id,
-            u.avatar_url, u.is_active, u.last_active_at, u.created_at,
+            sl.id AS location_id, sl.name AS location_name, u.avatar_url, u.is_active, u.last_active_at, u.created_at,
             COALESCE((
               SELECT SUM(s.total_price) FROM sales s
               WHERE s.sold_by = u.id
@@ -215,6 +236,12 @@ export function listAssociates(
                 AND s.created_at >= date_trunc('month', now() AT TIME ZONE $2) AT TIME ZONE $2
             ) AS month_orders
      FROM users u
+     LEFT JOIN LATERAL (
+       SELECT l.id, l.name FROM locations l
+       WHERE l.store_id = u.store_id AND (l.id = u.location_id OR (u.location_id IS NULL AND l.is_main))
+       ORDER BY (l.id = u.location_id) DESC
+       LIMIT 1
+     ) sl ON true
      WHERE u.store_id = $1 AND u.role = 'SALES_ASSOCIATE' AND u.deleted_at IS NULL
      ORDER BY u.id DESC`,
     [storeId, timezone],

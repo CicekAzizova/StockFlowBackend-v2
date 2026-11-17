@@ -8,6 +8,7 @@ import { requireStoreId } from '../../shared/auth-helpers.js';
 import * as authRepo from '../auth/auth.repository.js';
 import { hashPassword, verifyPassword } from '../auth/passwords.js';
 import * as sales from '../sales/sales.repository.js';
+import * as locations from '../locations/locations.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import { toAssociateDto, toUserDto } from './users.dto.js';
 import * as repo from './users.repository.js';
@@ -35,6 +36,19 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
 
   async function storeTimezone(storeId: number): Promise<string> {
     return (await stores.findStoreById(pool, storeId))?.timezone ?? config.defaultTimezone;
+  }
+
+  /** Satıcı yalnız bu mağazanın satış nöqtəsində (store növlü məkan) işləyə bilər. */
+  async function assertSellerLocation(
+    storeId: number,
+    locationId: number | null | undefined,
+  ): Promise<void> {
+    if (locationId === undefined || locationId === null) return;
+    const location = await locations.findLocation(pool, storeId, locationId);
+    if (!location) throw notFound('LOCATION_NOT_FOUND', 'Location not found');
+    if (location.kind !== 'store') {
+      throw badRequest('LOCATION_NOT_SELLABLE', 'A sales associate must work at a store');
+    }
   }
 
   return {
@@ -136,9 +150,11 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
         email: string;
         password: string;
         locale?: Locale | undefined;
+        location_id?: number | null | undefined;
       },
     ) {
       const storeId = requireStoreId(auth);
+      await assertSellerLocation(storeId, body.location_id);
       if (await repo.isEmailOrFinTaken(pool, { email: body.email, fin: body.fin })) {
         throw conflict('EMAIL_OR_FIN_TAKEN', TAKEN);
       }
@@ -154,6 +170,7 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
           fin: body.fin,
           passwordHash,
           storeId,
+          locationId: body.location_id ?? null,
           locale: body.locale ?? 'az',
         });
       } catch (error) {
@@ -185,11 +202,14 @@ export function createUsersService(deps: AppDeps, log: FastifyBaseLogger) {
         phone?: string | undefined;
         email?: string | undefined;
         password?: string | undefined;
+        location_id?: number | null | undefined;
       },
     ) {
       const storeId = requireStoreId(auth);
       const associate = await repo.findAssociate(pool, storeId, id);
       if (!associate) throw notFound('ASSOCIATE_NOT_FOUND', 'Sales associate not found');
+
+      await assertSellerLocation(storeId, body.location_id);
 
       const { password, ...profile } = body;
       if (
