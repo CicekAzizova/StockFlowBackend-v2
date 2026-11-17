@@ -195,3 +195,32 @@ describe('deleting locations with data', () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe('product stats', () => {
+  it('counts products by stock status at the selected location', async () => {
+    const owner = await registerOwner(ctx);
+    const shop = await addLocation(owner, 'Second shop', 'store');
+    await createProduct(ctx, owner, { quantity: 20, low_stock_limit: 5 });
+    await createProduct(ctx, owner, { quantity: 3, low_stock_limit: 5 });
+    await createProduct(ctx, owner, { quantity: 0, low_stock_limit: 5 });
+
+    expect((await http.get('/products/stats', owner.token)).body).toEqual({
+      total: 3,
+      in_stock: 1,
+      low_stock: 1,
+      out_of_stock: 1,
+    });
+
+    const other = await http.request('GET', '/products/stats', at(owner, shop));
+    expect(other.body).toEqual({ total: 3, in_stock: 0, low_stock: 0, out_of_stock: 3 });
+  });
+
+  it('is available to sales associates for their own location', async () => {
+    const owner = await registerOwner(ctx);
+    await createProduct(ctx, owner, { quantity: 10 });
+    const seller = await createAssociate(ctx, owner);
+    const res = await http.get('/products/stats', seller.token);
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(1);
+  });
+});

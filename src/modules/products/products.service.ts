@@ -114,6 +114,12 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
     lowStock: (auth: AuthContext, header: Header, query: PaginationQuery) =>
       page(auth, header, query, { lowStockOnly: true }),
 
+    async stats(auth: AuthContext, header: Header) {
+      const storeId = requireStoreId(auth);
+      const location = await resolveLocation(pool, auth, storeId, header);
+      return repo.countByStock(pool, storeId, location.id);
+    },
+
     async getById(auth: AuthContext, header: Header, id: number): Promise<ProductDto> {
       const storeId = requireStoreId(auth);
       const location = await resolveLocation(pool, auth, storeId, header);
