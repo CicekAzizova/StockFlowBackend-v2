@@ -60,6 +60,15 @@ export const productListQuery = paginationQuery.extend({
 
 export const lowStockQuery = paginationQuery;
 
+export const stockSummaryQuery = productListQuery.pick({ q: true, category: true });
+
+export const stockSummaryResponse = z.object({
+  total: z.number().int().describe('All products at the selected location'),
+  in_stock: z.number().int(),
+  low_stock: z.number().int().describe('Above 0 and at or below the low-stock limit'),
+  out_of_stock: z.number().int(),
+});
+
 export const skuQuery = z.object({
   sku: z.string({ error: 'SKU is required' }).trim().min(1, 'SKU is required').max(64),
 });

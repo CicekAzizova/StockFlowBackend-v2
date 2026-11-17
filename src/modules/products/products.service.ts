@@ -111,6 +111,16 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
     list: (auth: AuthContext, header: Header, query: PaginationQuery & ProductFilters) =>
       page(auth, header, query, { q: query.q, category: query.category, stock: query.stock }),
 
+    async stockSummary(
+      auth: AuthContext,
+      header: Header,
+      query: Pick<ProductFilters, 'q' | 'category'>,
+    ) {
+      const storeId = requireStoreId(auth);
+      const location = await resolveLocation(pool, auth, storeId, header);
+      return repo.stockSummary(pool, storeId, location.id, query);
+    },
+
     lowStock: (auth: AuthContext, header: Header, query: PaginationQuery) =>
       page(auth, header, query, { lowStockOnly: true }),
 

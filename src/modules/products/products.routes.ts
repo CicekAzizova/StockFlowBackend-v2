@@ -9,6 +9,8 @@ import {
   restockBody,
   skuQuery,
   stockBody,
+  stockSummaryQuery,
+  stockSummaryResponse,
 } from './products.schemas.js';
 import { createProductsService } from './products.service.js';
 
@@ -45,6 +47,22 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => service.lowStock(request.auth, locationHeader(request), request.query),
+  );
+
+  app.get(
+    '/stock-summary',
+    {
+      schema: {
+        tags: ['Products'],
+        summary: 'How many products are in stock, low or out of stock at the selected location',
+        description:
+          'Uses the X-Location-Id header like the list. Accepts the same q and category filters.',
+        security: secured,
+        querystring: stockSummaryQuery,
+        response: { 200: stockSummaryResponse },
+      },
+    },
+    async (request) => service.stockSummary(request.auth, locationHeader(request), request.query),
   );
 
   app.get(

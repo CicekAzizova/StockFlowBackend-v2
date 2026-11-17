@@ -195,3 +195,34 @@ describe('deleting locations with data', () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe('stock summary', () => {
+  it('counts products by stock status at the selected location', async () => {
+    const owner = await registerOwner(ctx);
+    const shop = await addLocation(owner, 'Second shop', 'store');
+    await createProduct(ctx, owner, { quantity: 50, low_stock_limit: 5 });
+    await createProduct(ctx, owner, { quantity: 3, low_stock_limit: 5 });
+    await createProduct(ctx, owner, { quantity: 0, low_stock_limit: 5 });
+    await createProduct(ctx, owner, { name: 'Special mug', quantity: 9, low_stock_limit: 5 });
+
+    const main = await http.get('/products/stock-summary', owner.token);
+    expect(main.status).toBe(200);
+    expect(main.body).toEqual({ total: 4, in_stock: 2, low_stock: 1, out_of_stock: 1 });
+
+    const other = await http.request('GET', '/products/stock-summary', at(owner, shop));
+    expect(other.body).toEqual({ total: 4, in_stock: 0, low_stock: 0, out_of_stock: 4 });
+
+    const search = await http.get('/products/stock-summary?q=mug', owner.token);
+    expect(search.body).toEqual({ total: 1, in_stock: 1, low_stock: 0, out_of_stock: 0 });
+  });
+
+  it('is available to associates for their own location', async () => {
+    const owner = await registerOwner(ctx);
+    await createProduct(ctx, owner, { quantity: 2, low_stock_limit: 5 });
+    const seller = await createAssociate(ctx, owner);
+
+    const res = await http.get('/products/stock-summary', seller.token);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ total: 1, low_stock: 1 });
+  });
+});

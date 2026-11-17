@@ -118,6 +118,36 @@ export async function listProducts(
   return { rows, total: count?.count ?? 0 };
 }
 
+export interface StockSummary {
+  total: number;
+  in_stock: number;
+  low_stock: number;
+  out_of_stock: number;
+}
+
+/** Seçilmiş məkandakı məhsulların qalıq vəziyyətinə görə sayı (axtarış və kateqoriya süzgəci ilə). */
+export async function stockSummary(
+  db: Queryable,
+  storeId: number,
+  locationId: number,
+  filters: Pick<ProductFilters, 'q' | 'category'>,
+): Promise<StockSummary> {
+  const { where, params } = buildWhere(storeId, locationId, filters);
+  const row = await queryOne<StockSummary>(
+    db,
+    `SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE ${QTY} > p.low_stock_limit)::int AS in_stock,
+            COUNT(*) FILTER (WHERE ${QTY} > 0 AND ${QTY} <= p.low_stock_limit)::int AS low_stock,
+            COUNT(*) FILTER (WHERE ${QTY} = 0)::int AS out_of_stock
+     FROM products p
+     LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.location_id = $2
+     LEFT JOIN categories c ON c.id = p.category_id
+     WHERE ${where}`,
+    params,
+  );
+  return row ?? { total: 0, in_stock: 0, low_stock: 0, out_of_stock: 0 };
+}
+
 export function findProductById(
   db: Queryable,
   storeId: number,
