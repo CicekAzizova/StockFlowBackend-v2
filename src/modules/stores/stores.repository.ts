@@ -1,4 +1,5 @@
 import { buildSetClause, execute, queryOne, type Queryable } from '../../db/pool.js';
+import type { CustomSubcategory } from './store-subcategories.js';
 
 export interface StoreRecord {
   id: number;
@@ -10,6 +11,7 @@ export interface StoreRecord {
   currency: string;
   main_categories: string[];
   subcategories: string[];
+  custom_subcategories: CustomSubcategory[];
   country: string | null;
   city: string;
   onboarding_completed: boolean;
@@ -17,7 +19,7 @@ export interface StoreRecord {
 }
 
 const COLUMNS =
-  'id, owner_id, name, address, phone, timezone, currency, main_categories, subcategories, country, city, onboarding_completed, created_at';
+  'id, owner_id, name, address, phone, timezone, currency, main_categories, subcategories, custom_subcategories, country, city, onboarding_completed, created_at';
 
 export function insertStore(
   db: Queryable,
@@ -63,6 +65,8 @@ export async function updateStore(
     currency?: string;
     main_categories?: string[];
     subcategories?: string[];
+    /** JSON.stringify ilə verilir (pg massivləri JSON kimi göndərmir). */
+    custom_subcategories?: string;
     country?: string | null;
     city?: string;
     onboarding_completed?: boolean;

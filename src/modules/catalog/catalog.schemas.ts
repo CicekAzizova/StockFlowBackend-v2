@@ -15,6 +15,24 @@ export const subcategoriesSchema = z
   .max(300)
   .refine((codes) => new Set(codes).size === codes.length, 'Subcategories must not repeat');
 
+/** Müştərinin göndərdiyi öz alt kateqoriyalar siyahısı (tam siyahı). Kod verilmirsə yeni yaradılır. */
+export const customSubcategoriesInputSchema = z
+  .array(
+    z.object({
+      code: z.string().trim().min(1).max(64).optional(),
+      main: z.enum(MAIN_CATEGORY_CODES, { error: 'Unsupported category' }),
+      name: z.string({ error: 'Name is required' }).trim().min(1, 'Name is required').max(60),
+    }),
+    { error: 'Custom subcategories must be a list' },
+  )
+  .max(100);
+
+export const customSubcategoryDto = z.object({
+  code: z.string(),
+  main: z.string(),
+  name: z.string(),
+});
+
 const namesDto = z.object({
   en: z.string(),
   az: z.string(),

@@ -3,6 +3,7 @@ import type { Storage } from '../../infra/storage/storage.js';
 import { thumbnailUrlFor } from '../../infra/images.js';
 import { formatTimestamp } from '../../shared/formatting.js';
 import { localeSchema } from '../../shared/schemas.js';
+import { customSubcategoryDto } from '../catalog/catalog.schemas.js';
 import type { AssociateRow, UserWithStore } from './users.repository.js';
 
 /** iOS-dakı User və SalesAssociateResponse modelləri bu açarlara güvənir. Silməyin, yalnız əlavə edin. */
@@ -22,6 +23,9 @@ export const userDtoSchema = z.object({
   subcategories: z
     .array(z.string())
     .describe('Subcategories the store works with (catalog codes); empty means all of them'),
+  custom_subcategories: z
+    .array(customSubcategoryDto)
+    .describe('Subcategories the owner created for this store'),
   avatar_url: z.string().nullable(),
   avatar_thumbnail_url: z.string().nullable(),
   locale: localeSchema,
@@ -47,6 +51,7 @@ export function toUserDto(user: UserWithStore, storage: Storage): UserDto {
     currency: user.store_currency ?? 'USD',
     main_categories: user.store_main_categories ?? ['other'],
     subcategories: user.store_subcategories ?? [],
+    custom_subcategories: user.store_custom_subcategories ?? [],
     avatar_url: user.avatar_url,
     avatar_thumbnail_url: user.avatar_url ? thumbnailUrlFor(storage, user.avatar_url) : null,
     locale: user.locale,

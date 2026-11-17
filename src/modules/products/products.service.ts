@@ -9,7 +9,7 @@ import { offsetOf, toPage, type PaginationQuery } from '../../shared/schemas.js'
 import * as categories from '../categories/categories.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as subscriptions from '../subscriptions/subscriptions.repository.js';
-import { isSubcategoryOfAny } from '../catalog/catalog.data.js';
+import { isAllowedSubcategory } from '../stores/store-subcategories.js';
 import * as repo from './products.repository.js';
 import type { ProductFilters, ProductRow, ProductWrite } from './products.repository.js';
 import type { ProductBody, ProductDto } from './products.schemas.js';
@@ -63,7 +63,10 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
   ): Promise<void> {
     if (subcategory === undefined || subcategory === null) return;
     const store = await stores.findStoreById(db, storeId);
-    if (!store || !isSubcategoryOfAny(subcategory, store.main_categories)) {
+    if (
+      !store ||
+      !isAllowedSubcategory(subcategory, store.main_categories, store.custom_subcategories)
+    ) {
       throw badRequest(
         'INVALID_SUBCATEGORY',
         'Subcategory does not belong to the categories of this store',
