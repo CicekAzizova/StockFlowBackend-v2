@@ -85,6 +85,8 @@ export function api(app: FastifyInstance) {
     return { status: response.statusCode, body, headers: response.headers };
   }
   return {
+    /** Başlıqlı sorğu üçün (məs. X-Location-Id). */
+    request: call,
     get: (url: string, token?: string) => call('GET', url, token ? { token } : {}),
     post: (url: string, payload?: unknown, token?: string) =>
       call('POST', url, { payload: payload ?? {}, ...(token ? { token } : {}) }),

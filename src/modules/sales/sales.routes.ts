@@ -1,3 +1,4 @@
+import { locationHeader } from '../../shared/location-context.js';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { idParams, paginatedResponse } from '../../shared/schemas.js';
 import {
@@ -32,7 +33,7 @@ export const salesRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      const sale = await service.create(request.auth, request.body);
+      const sale = await service.create(request.auth, locationHeader(request), request.body);
       return reply.code(201).send({
         message: 'Sale completed successfully',
         saleId: sale.id,

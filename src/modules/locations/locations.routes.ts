@@ -150,7 +150,7 @@ export const locationRoutes: FastifyPluginAsyncZod = async (app) => {
         summary: 'Delete a location',
         description:
           'The main location cannot be deleted: make another store the main one first. ' +
-          'Once stock and sales are tied to locations, a location that has any of them cannot be deleted either.',
+          'A location that still has stock or has sales history cannot be deleted.',
         security: secured,
         params: idParams,
         response: { 200: messageResponse },
@@ -165,6 +165,19 @@ export const locationRoutes: FastifyPluginAsyncZod = async (app) => {
         throw badRequest(
           'CANNOT_DELETE_MAIN_LOCATION',
           'The main location cannot be deleted. Make another store the main one first',
+        );
+      }
+      const usage = await repo.usageOf(pool, id);
+      if (usage.has_sales) {
+        throw conflict(
+          'LOCATION_HAS_SALES',
+          'This location has sales history and cannot be deleted',
+        );
+      }
+      if (usage.has_stock) {
+        throw conflict(
+          'LOCATION_HAS_STOCK',
+          'This location still has stock. Move or remove it first',
         );
       }
       await repo.deleteLocation(pool, storeId, id);

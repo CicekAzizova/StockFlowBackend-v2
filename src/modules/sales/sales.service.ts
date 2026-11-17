@@ -3,6 +3,7 @@ import { withTransaction } from '../../db/pool.js';
 import { thumbnailUrlFor } from '../../infra/images.js';
 import { badRequest, notFound } from '../../shared/errors.js';
 import { requireStoreId } from '../../shared/auth-helpers.js';
+import { resolveLocation } from '../../shared/location-context.js';
 import { discountedPrice, formatTimestamp, roundMoney } from '../../shared/formatting.js';
 import { offsetOf, toPage, type PaginationQuery } from '../../shared/schemas.js';
 import * as stores from '../stores/stores.repository.js';
@@ -48,8 +49,12 @@ export function createSalesService(deps: AppDeps) {
   }
 
   return {
-    async create(auth: AuthContext, input: CreateSaleInput) {
+    async create(auth: AuthContext, header: string | string[] | undefined, input: CreateSaleInput) {
       const storeId = requireStoreId(auth);
+      const location = await resolveLocation(pool, auth, storeId, header);
+      if (location.kind !== 'store') {
+        throw badRequest('SALE_NOT_ALLOWED_AT_WAREHOUSE', 'Sales can only be made at a store');
+      }
 
       // Eyni məhsul bir neçə dəfə göndərilibsə birləşdirilir, ID-yə görə sıralanır
       // ki, paralel satışlar bir-birini kilidləməsin (deadlock yoxdur).
@@ -63,13 +68,12 @@ export function createSalesService(deps: AppDeps) {
         const items: repo.SaleItemRow[] = [];
 
         for (const [productId, quantity] of lines) {
-          const product = await repo.decrementStock(tx, storeId, productId, quantity);
-          if (!product) {
-            const existing = await repo.productExists(tx, storeId, productId);
-            if (!existing) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+          const product = await repo.findProductForSale(tx, storeId, productId);
+          if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+          if (!(await repo.decrementStock(tx, productId, location.id, quantity))) {
             throw badRequest('INSUFFICIENT_STOCK', 'Insufficient stock', {
               product_id: productId,
-              available: existing.quantity,
+              available: await repo.stockAt(tx, productId, location.id),
             });
           }
           const unitPrice = discountedPrice(product.price, product.discount);
@@ -87,6 +91,7 @@ export function createSalesService(deps: AppDeps) {
         const receiptNo = await stores.nextReceiptNo(tx, storeId);
         const sale = await repo.insertSale(tx, {
           storeId,
+          locationId: location.id,
           receiptNo,
           soldBy: auth.userId,
           paymentMethod: input.payment_method,

@@ -29,6 +29,7 @@ export const productBody = z.object({
     .max(100, 'Discount must be between 0 and 100')
     .optional(),
   cost_price: money('Cost price must be a valid non-negative number').optional(),
+  /** Seçilmiş məkandakı qalıq (X-Location-Id, yoxdursa əsas məkan). */
   quantity: z
     .number({ error: 'Quantity must be a non-negative integer' })
     .int('Quantity must be a non-negative integer')
@@ -88,7 +89,19 @@ export const productDto = z.object({
   price: z.number(),
   discount: z.number(),
   cost_price: z.number().describe('Always 0 for sales associates'),
-  quantity: z.number().int(),
+  quantity: z
+    .number()
+    .int()
+    .describe('Stock at the selected location (X-Location-Id, default main)'),
+  stocks: z
+    .array(
+      z.object({
+        location_id: z.number().int(),
+        location_name: z.string(),
+        quantity: z.number().int(),
+      }),
+    )
+    .describe('Stock at every location (sales associates only see their own location)'),
   low_stock_limit: z.number().int(),
   image_url: z.string().nullable().describe('First image, kept for old clients'),
   image_urls: z.array(z.string()),
