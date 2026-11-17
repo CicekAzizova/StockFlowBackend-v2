@@ -107,42 +107,58 @@ export interface ProductForSale {
   discount: number;
 }
 
-/**
- * Stoku atomik azaldır: yalnız kifayət qədər qalıq varsa sətir yenilənir.
- * İki satıcı eyni anda son ədədi almağa çalışsa yalnız biri uğur qazanır.
- */
-export function decrementStock(
+/** Satıla bilən (silinməmiş) məhsul məlumatı. */
+export function findProductForSale(
   tx: Queryable,
   storeId: number,
   productId: number,
-  quantity: number,
 ): Promise<ProductForSale | null> {
   return queryOne<ProductForSale>(
     tx,
-    `UPDATE products
-     SET quantity = quantity - $3, updated_at = now()
-     WHERE id = $1 AND store_id = $2 AND deleted_at IS NULL AND quantity >= $3
-     RETURNING id, name, sku, price, discount`,
-    [productId, storeId, quantity],
+    `SELECT id, name, sku, price, discount FROM products
+     WHERE id = $1 AND store_id = $2 AND deleted_at IS NULL`,
+    [productId, storeId],
   );
 }
 
-export async function productExists(
+/**
+ * Məkandakı qalığı atomik azaldır: yalnız kifayət qədər qalıq varsa sətir yenilənir.
+ * İki satıcı eyni anda son ədədi almağa çalışsa yalnız biri uğur qazanır.
+ */
+export async function decrementStock(
   tx: Queryable,
-  storeId: number,
   productId: number,
-): Promise<{ quantity: number } | null> {
-  return queryOne<{ quantity: number }>(
+  locationId: number,
+  quantity: number,
+): Promise<boolean> {
+  const row = await queryOne<{ quantity: number }>(
     tx,
-    'SELECT quantity FROM products WHERE id = $1 AND store_id = $2 AND deleted_at IS NULL',
-    [productId, storeId],
+    `UPDATE product_stock SET quantity = quantity - $3, updated_at = now()
+     WHERE product_id = $1 AND location_id = $2 AND quantity >= $3
+     RETURNING quantity`,
+    [productId, locationId, quantity],
   );
+  return row !== null;
+}
+
+export async function stockAt(
+  tx: Queryable,
+  productId: number,
+  locationId: number,
+): Promise<number> {
+  const row = await queryOne<{ quantity: number }>(
+    tx,
+    'SELECT quantity FROM product_stock WHERE product_id = $1 AND location_id = $2',
+    [productId, locationId],
+  );
+  return row?.quantity ?? 0;
 }
 
 export async function insertSale(
   tx: Queryable,
   input: {
     storeId: number;
+    locationId: number;
     receiptNo: number;
     soldBy: number;
     paymentMethod: PaymentMethod;
@@ -152,10 +168,11 @@ export async function insertSale(
 ): Promise<{ id: number; created_at: Date }> {
   const row = await queryOne<{ id: number; created_at: Date }>(
     tx,
-    `INSERT INTO sales (store_id, receipt_no, sold_by, payment_method, total_price, note)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
+    `INSERT INTO sales (store_id, location_id, receipt_no, sold_by, payment_method, total_price, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at`,
     [
       input.storeId,
+      input.locationId,
       input.receiptNo,
       input.soldBy,
       input.paymentMethod,

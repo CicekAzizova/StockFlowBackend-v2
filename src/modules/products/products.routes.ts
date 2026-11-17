@@ -1,4 +1,5 @@
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { locationHeader } from '../../shared/location-context.js';
 import { idParams, messageResponse, paginatedResponse } from '../../shared/schemas.js';
 import {
   lowStockQuery,
@@ -29,7 +30,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: paginatedResponse(productDto) },
       },
     },
-    async (request) => service.list(request.auth, request.query),
+    async (request) => service.list(request.auth, locationHeader(request), request.query),
   );
 
   app.get(
@@ -43,7 +44,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: paginatedResponse(productDto) },
       },
     },
-    async (request) => service.lowStock(request.auth, request.query),
+    async (request) => service.lowStock(request.auth, locationHeader(request), request.query),
   );
 
   app.get(
@@ -57,7 +58,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: productDto },
       },
     },
-    async (request) => service.getBySku(request.auth, request.query.sku),
+    async (request) => service.getBySku(request.auth, locationHeader(request), request.query.sku),
   );
 
   app.get(
@@ -71,7 +72,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: productDto },
       },
     },
-    async (request) => service.getById(request.auth, request.params.id),
+    async (request) => service.getById(request.auth, locationHeader(request), request.params.id),
   );
 
   app.post(
@@ -87,7 +88,9 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) =>
-      reply.code(201).send(await service.create(request.auth, request.body)),
+      reply
+        .code(201)
+        .send(await service.create(request.auth, locationHeader(request), request.body)),
   );
 
   app.put(
@@ -106,7 +109,8 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: productDto },
       },
     },
-    async (request) => service.update(request.auth, request.params.id, request.body),
+    async (request) =>
+      service.update(request.auth, locationHeader(request), request.params.id, request.body),
   );
 
   app.delete(
@@ -141,7 +145,12 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => {
-      await service.setStock(request.auth, request.params.id, request.body.quantity);
+      await service.setStock(
+        request.auth,
+        locationHeader(request),
+        request.params.id,
+        request.body.quantity,
+      );
       return { message: 'Stock updated successfully' };
     },
   );
@@ -160,6 +169,12 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
         response: { 200: productDto },
       },
     },
-    async (request) => service.restock(request.auth, request.params.id, request.body.quantity),
+    async (request) =>
+      service.restock(
+        request.auth,
+        locationHeader(request),
+        request.params.id,
+        request.body.quantity,
+      ),
   );
 };
