@@ -9,6 +9,7 @@ import {
   restockBody,
   skuQuery,
   stockBody,
+  stockCountsDto,
 } from './products.schemas.js';
 import { createProductsService } from './products.service.js';
 
@@ -31,6 +32,20 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => service.list(request.auth, locationHeader(request), request.query),
+  );
+
+  app.get(
+    '/stats',
+    {
+      schema: {
+        tags: ['Products'],
+        summary: 'Product counts by stock status at the selected location',
+        description: 'Numbers for the filter chips: all, in stock, low stock and out of stock.',
+        security: secured,
+        response: { 200: stockCountsDto },
+      },
+    },
+    async (request) => service.stats(request.auth, locationHeader(request)),
   );
 
   app.get(

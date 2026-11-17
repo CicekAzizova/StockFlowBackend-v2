@@ -278,3 +278,30 @@ export async function countActiveProductsOfOwner(db: Queryable, ownerId: number)
   );
   return row?.count ?? 0;
 }
+
+export interface StockCounts {
+  total: number;
+  in_stock: number;
+  low_stock: number;
+  out_of_stock: number;
+}
+
+/** Seçilmiş məkanda məhsulların qalıq vəziyyətinə görə sayı (siyahıdakı süzgəclərlə eyni qaydalar). */
+export async function countByStock(
+  db: Queryable,
+  storeId: number,
+  locationId: number,
+): Promise<StockCounts> {
+  const row = await queryOne<StockCounts>(
+    db,
+    `SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE ${QTY} > p.low_stock_limit)::int AS in_stock,
+            COUNT(*) FILTER (WHERE ${QTY} > 0 AND ${QTY} <= p.low_stock_limit)::int AS low_stock,
+            COUNT(*) FILTER (WHERE ${QTY} = 0)::int AS out_of_stock
+     FROM products p
+     LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.location_id = $2
+     WHERE p.store_id = $1 AND p.deleted_at IS NULL`,
+    [storeId, locationId],
+  );
+  return row ?? { total: 0, in_stock: 0, low_stock: 0, out_of_stock: 0 };
+}

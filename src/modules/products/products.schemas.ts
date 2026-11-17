@@ -116,3 +116,10 @@ export const productDto = z.object({
 });
 
 export type ProductDto = z.infer<typeof productDto>;
+
+export const stockCountsDto = z.object({
+  total: z.number().int().describe('All products'),
+  in_stock: z.number().int().describe('Above the low-stock limit'),
+  low_stock: z.number().int().describe('In stock but at or below the low-stock limit'),
+  out_of_stock: z.number().int().describe('Quantity is 0'),
+});
