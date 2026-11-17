@@ -18,6 +18,8 @@ export const userDtoSchema = z.object({
   fin: z.string().nullable(),
   store_id: z.number().int().nullable(),
   store_name: z.string().nullable(),
+  location_id: z.number().int().nullable().describe('Sales associates only: where they work'),
+  location_name: z.string().nullable(),
   currency: z.string().describe('Store currency (ISO 4217), USD if there is no store'),
   main_categories: z.array(z.string()).describe('Store categories (catalog codes)'),
   subcategories: z
@@ -48,6 +50,8 @@ export function toUserDto(user: UserWithStore, storage: Storage): UserDto {
     fin: user.fin,
     store_id: user.effective_store_id,
     store_name: user.store_name,
+    location_id: user.seller_location_id,
+    location_name: user.seller_location_name,
     currency: user.store_currency ?? 'USD',
     main_categories: user.store_main_categories ?? ['other'],
     subcategories: user.store_subcategories ?? [],
@@ -69,6 +73,12 @@ export const associateDtoSchema = z.object({
   phone: z.string(),
   role: z.literal('SALES_ASSOCIATE'),
   store_id: z.number().int(),
+  location_id: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Where the associate works (main location if not assigned)'),
+  location_name: z.string().nullable(),
   avatar_url: z.string().nullable(),
   /** false: sahib deaktiv edib, satıcı daxil ola bilmir. */
   is_active: z.boolean(),
@@ -103,6 +113,8 @@ export function toAssociateDto(row: AssociateRow, monthTotal: number): Associate
     phone: row.phone,
     role: 'SALES_ASSOCIATE',
     store_id: row.store_id,
+    location_id: row.location_id,
+    location_name: row.location_name,
     avatar_url: row.avatar_url,
     is_active: row.is_active,
     is_online: row.is_active && isOnline(row.last_active_at),

@@ -30,6 +30,13 @@ export const createAssociateBody = z.object({
   email: emailSchema,
   password: passwordSchema,
   locale: localeSchema.optional(),
+  location_id: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .optional()
+    .describe('Store the associate works at. null or omitted: the main location'),
 });
 
 export const updateAssociateBody = z.object({
@@ -39,6 +46,13 @@ export const updateAssociateBody = z.object({
   phone: phoneSchema.optional(),
   email: emailSchema.optional(),
   password: passwordSchema.optional().describe('Set a new password for the associate'),
+  location_id: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .optional()
+    .describe('Store the associate works at. null or omitted: the main location'),
 });
 
 export const updateMeBody = z.object({

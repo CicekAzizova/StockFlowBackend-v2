@@ -150,7 +150,7 @@ export const locationRoutes: FastifyPluginAsyncZod = async (app) => {
         summary: 'Delete a location',
         description:
           'The main location cannot be deleted: make another store the main one first. ' +
-          'A location that still has stock or has sales history cannot be deleted.',
+          'A location that still has stock, sales history or assigned sales associates cannot be deleted.',
         security: secured,
         params: idParams,
         response: { 200: messageResponse },
@@ -172,6 +172,12 @@ export const locationRoutes: FastifyPluginAsyncZod = async (app) => {
         throw conflict(
           'LOCATION_HAS_SALES',
           'This location has sales history and cannot be deleted',
+        );
+      }
+      if (usage.has_sellers) {
+        throw conflict(
+          'LOCATION_HAS_SELLERS',
+          'Sales associates work at this location. Move them to another store first',
         );
       }
       if (usage.has_stock) {
