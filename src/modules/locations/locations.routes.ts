@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { isUniqueViolation, withTransaction } from '../../db/pool.js';
 import { badRequest, conflict, notFound } from '../../shared/errors.js';
 import { requireStoreId } from '../../shared/auth-helpers.js';
-import { idParams, optionalString, requiredString } from '../../shared/schemas.js';
+import { idParams, messageResponse, optionalString, requiredString } from '../../shared/schemas.js';
 import * as repo from './locations.repository.js';
 
 /** Bir mağazada ən çox məkan sayı (sui-istifadədən qorunmaq üçün). */
@@ -139,6 +139,36 @@ export const locationRoutes: FastifyPluginAsyncZod = async (app) => {
         if (isUniqueViolation(error, 'locations_store_name_uq')) throw conflict(...ALREADY_EXISTS);
         throw error;
       }
+    },
+  );
+
+  app.delete(
+    '/:id',
+    {
+      schema: {
+        tags: ['Locations'],
+        summary: 'Delete a location',
+        description:
+          'The main location cannot be deleted: make another store the main one first. ' +
+          'Once stock and sales are tied to locations, a location that has any of them cannot be deleted either.',
+        security: secured,
+        params: idParams,
+        response: { 200: messageResponse },
+      },
+    },
+    async (request) => {
+      const storeId = requireStoreId(request.auth);
+      const { id } = request.params;
+      const existing = await repo.findLocation(pool, storeId, id);
+      if (!existing) throw notFound('LOCATION_NOT_FOUND', 'Location not found');
+      if (existing.is_main) {
+        throw badRequest(
+          'CANNOT_DELETE_MAIN_LOCATION',
+          'The main location cannot be deleted. Make another store the main one first',
+        );
+      }
+      await repo.deleteLocation(pool, storeId, id);
+      return { message: 'Location deleted successfully' };
     },
   );
 };
