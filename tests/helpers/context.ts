@@ -135,7 +135,7 @@ export async function createAssociate(ctx: TestContext, owner: Session, override
     {
       name: 'Seller',
       surname: 'One',
-      fin: `FIN${unique()}`.toUpperCase().slice(0, 10),
+      fin: `FIN${unique()}`.toUpperCase().slice(-11),
       phone: '+994507654321',
       email,
       password: 'seller123',

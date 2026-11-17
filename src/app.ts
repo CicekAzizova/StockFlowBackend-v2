@@ -26,6 +26,7 @@ import { salesRoutes } from './modules/sales/sales.routes.js';
 import { locationRoutes } from './modules/locations/locations.routes.js';
 import { storeRoutes } from './modules/stores/stores.routes.js';
 import { uploadRoutes } from './modules/uploads/uploads.routes.js';
+import { transferRoutes } from './modules/transfers/transfers.routes.js';
 import { userRoutes } from './modules/users/users.routes.js';
 import { AppError } from './shared/errors.js';
 
@@ -171,6 +172,7 @@ export async function buildApp(deps: AppDeps) {
   await app.register(categoryRoutes, { prefix: '/categories' });
   await app.register(productRoutes, { prefix: '/products' });
   await app.register(salesRoutes, { prefix: '/sales' });
+  await app.register(transferRoutes, { prefix: '/transfers' });
   await app.register(uploadRoutes, { prefix: '/uploads' });
 
   return app;

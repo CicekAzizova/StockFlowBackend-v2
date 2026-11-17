@@ -134,14 +134,25 @@ export function deleteLocation(db: Queryable, storeId: number, id: number): Prom
 export async function usageOf(
   db: Queryable,
   id: number,
-): Promise<{ has_stock: boolean; has_sales: boolean; has_sellers: boolean }> {
-  const row = await queryOne<{ has_stock: boolean; has_sales: boolean; has_sellers: boolean }>(
+): Promise<{
+  has_stock: boolean;
+  has_sales: boolean;
+  has_sellers: boolean;
+  has_transfers: boolean;
+}> {
+  const row = await queryOne<{
+    has_stock: boolean;
+    has_sales: boolean;
+    has_sellers: boolean;
+    has_transfers: boolean;
+  }>(
     db,
     `SELECT EXISTS (SELECT 1 FROM product_stock ps JOIN products p ON p.id = ps.product_id
                     WHERE ps.location_id = $1 AND ps.quantity > 0 AND p.deleted_at IS NULL) AS has_stock,
             EXISTS (SELECT 1 FROM sales WHERE location_id = $1) AS has_sales,
-            EXISTS (SELECT 1 FROM users WHERE location_id = $1 AND deleted_at IS NULL) AS has_sellers`,
+            EXISTS (SELECT 1 FROM users WHERE location_id = $1 AND deleted_at IS NULL) AS has_sellers,
+            EXISTS (SELECT 1 FROM stock_transfers WHERE from_location_id = $1 OR to_location_id = $1) AS has_transfers`,
     [id],
   );
-  return row ?? { has_stock: false, has_sales: false, has_sellers: false };
+  return row ?? { has_stock: false, has_sales: false, has_sellers: false, has_transfers: false };
 }
