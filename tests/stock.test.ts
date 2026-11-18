@@ -224,3 +224,77 @@ describe('product stats', () => {
     expect(res.body.total).toBe(1);
   });
 });
+
+describe('product unit and initial stocks', () => {
+  it('defaults the unit to piece and stores the chosen one', async () => {
+    const owner = await registerOwner(ctx);
+    const plain = await createProduct(ctx, owner);
+    expect((await http.get(`/products/${plain.id}`, owner.token)).body.unit).toBe('piece');
+
+    const kg = await createProduct(ctx, owner, { unit: 'kg' });
+    expect((await http.get(`/products/${kg.id}`, owner.token)).body.unit).toBe('kg');
+
+    const bad = await http.post(
+      '/products',
+      { name: 'X', sku: 'BAD-UNIT', price: 1, unit: 'box' },
+      owner.token,
+    );
+    expect(bad.status).toBe(400);
+  });
+
+  it('sets the starting stock of every location on create', async () => {
+    const owner = await registerOwner(ctx);
+    const shop = await addLocation(owner, 'Second shop', 'store');
+    const warehouse = await addLocation(owner, 'Warehouse', 'warehouse');
+    const main = (await http.get('/locations', owner.token)).body.find(
+      (l: { is_main: boolean }) => l.is_main,
+    ).id as number;
+
+    const p = await createProduct(ctx, owner, {
+      quantity: undefined,
+      stocks: [
+        { location_id: main, quantity: 24 },
+        { location_id: shop, quantity: 12 },
+        { location_id: warehouse, quantity: 60 },
+      ],
+    });
+
+    const res = await http.get(`/products/${p.id}`, owner.token);
+    const byLocation = Object.fromEntries(
+      res.body.stocks.map((s: { location_id: number; quantity: number }) => [
+        s.location_id,
+        s.quantity,
+      ]),
+    );
+    expect(byLocation).toEqual({ [main]: 24, [shop]: 12, [warehouse]: 60 });
+  });
+
+  it('rejects stocks for a location of another store or a repeated location', async () => {
+    const owner = await registerOwner(ctx);
+    const other = await registerOwner(ctx);
+    const foreign = await addLocation(other, 'Foreign shop', 'store');
+    const own = await addLocation(owner, 'Own shop', 'store');
+
+    const foreignRes = await http.post(
+      '/products',
+      { name: 'A', sku: 'A-1', price: 1, stocks: [{ location_id: foreign, quantity: 3 }] },
+      owner.token,
+    );
+    expect(foreignRes.status).toBe(400);
+
+    const repeated = await http.post(
+      '/products',
+      {
+        name: 'B',
+        sku: 'B-1',
+        price: 1,
+        stocks: [
+          { location_id: own, quantity: 1 },
+          { location_id: own, quantity: 2 },
+        ],
+      },
+      owner.token,
+    );
+    expect(repeated.status).toBe(400);
+  });
+});

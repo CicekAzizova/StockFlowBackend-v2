@@ -26,6 +26,7 @@ export interface ProductRow {
   weight: number | null;
   weight_unit: 'mg' | 'g' | 'kg' | 'ml' | 'l' | null;
   size: string | null;
+  unit: 'piece' | 'kg' | 'l' | 'pack';
   /** Kataloq kodu (məs. food.dairy) və ya null. */
   subcategory: string | null;
   /** Bu ay (mağazanın saat qurşağı ilə) satılan ədəd sayı. */
@@ -48,7 +49,7 @@ const QTY = 'COALESCE(ps.quantity, 0)';
 const select = (locParam: string) => `
   SELECT p.id, p.store_id, p.name, p.sku, COALESCE(c.name, '') AS category, p.description,
          p.price, p.discount, p.cost_price, ${QTY} AS quantity, p.low_stock_limit, p.image_urls,
-         p.weight, p.weight_unit, p.size, p.subcategory, p.created_at, p.updated_at,
+         p.weight, p.weight_unit, p.size, p.unit, p.subcategory, p.created_at, p.updated_at,
          COALESCE((
            SELECT json_agg(json_build_object(
                     'location_id', l.id, 'location_name', l.name,
@@ -157,6 +158,7 @@ export interface ProductWrite {
   weight: number | null;
   weight_unit: string | null;
   size: string | null;
+  unit: string;
   subcategory: string | null;
 }
 
@@ -170,8 +172,8 @@ export async function insertProduct(
     db,
     `INSERT INTO products (store_id, created_by, name, sku, category_id, description, price,
                            discount, cost_price, low_stock_limit, image_urls,
-                           weight, weight_unit, size, subcategory)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                           weight, weight_unit, size, subcategory, unit)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING id`,
     [
       storeId,
@@ -189,6 +191,7 @@ export async function insertProduct(
       input.weight_unit,
       input.size,
       input.subcategory,
+      input.unit,
     ],
   );
   if (!row) throw new Error('Failed to insert product');

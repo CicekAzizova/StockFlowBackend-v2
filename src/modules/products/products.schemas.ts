@@ -13,6 +13,9 @@ const money = (message: string) =>
 
 export const WEIGHT_UNITS = ['mg', 'g', 'kg', 'ml', 'l'] as const;
 
+/** Satış vahidi (məhsulun necə sayıldığı). */
+export const PRODUCT_UNITS = ['piece', 'kg', 'l', 'pack'] as const;
+
 /**
  * Yaratma və yeniləmə eyni sxemdən istifadə edir.
  * Yeniləmədə göndərilməyən (undefined) sahə dəyişmir, null isə sahəni təmizləyir.
@@ -48,6 +51,20 @@ export const productBody = z.object({
   weight_unit: z.enum(WEIGHT_UNITS).nullable().optional(),
   size: optionalString(80).nullable().optional(),
   subcategory: z.string().trim().min(1).max(64).nullable().optional(),
+  unit: z.enum(PRODUCT_UNITS).optional(),
+  /** Yalnız yaratmada: hər məkan üçün başlanğıc qalıq. Verilərsə `quantity` nəzərə alınmır. */
+  stocks: z
+    .array(
+      z.object({
+        location_id: z.number().int().positive(),
+        quantity: z
+          .number({ error: 'Quantity must be a non-negative integer' })
+          .int('Quantity must be a non-negative integer')
+          .min(0, 'Quantity must be a non-negative integer'),
+      }),
+    )
+    .max(20)
+    .optional(),
 });
 
 export type ProductBody = z.infer<typeof productBody>;
@@ -108,6 +125,7 @@ export const productDto = z.object({
   thumbnail_urls: z.array(z.string()).describe('Small versions of image_urls, same order'),
   weight: z.number().nullable(),
   weight_unit: z.enum(WEIGHT_UNITS).nullable(),
+  unit: z.enum(PRODUCT_UNITS),
   size: z.string().nullable(),
   subcategory: z.string().nullable().describe('Catalog code such as food.dairy'),
   sold_this_month: z.number().int().describe('Units sold this month (store time zone)'),
