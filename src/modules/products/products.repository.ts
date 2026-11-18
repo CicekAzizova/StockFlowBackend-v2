@@ -214,36 +214,48 @@ export async function updateProduct(
   );
 }
 
-/** Məhsulun seçilmiş məkandakı qalığını təyin edir (sətir yoxdursa yaradır). */
-export function setQuantity(
+/**
+ * Məhsulun seçilmiş məkandakı qalığını təyin edir (sətir yoxdursa yaradır).
+ * Köhnə qalıq kilidlə oxunur, ona görə transaksiya içində çağırılmalıdır.
+ */
+export async function setQuantity(
   db: Queryable,
   productId: number,
   locationId: number,
   quantity: number,
-): Promise<number> {
-  return execute(
+): Promise<{ previous: number; balance: number }> {
+  const old = await queryOne<{ quantity: number }>(
+    db,
+    'SELECT quantity FROM product_stock WHERE product_id = $1 AND location_id = $2 FOR UPDATE',
+    [productId, locationId],
+  );
+  await execute(
     db,
     `INSERT INTO product_stock (product_id, location_id, quantity) VALUES ($1, $2, $3)
      ON CONFLICT (product_id, location_id)
      DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = now()`,
     [productId, locationId, quantity],
   );
+  return { previous: old?.quantity ?? 0, balance: quantity };
 }
 
-/** Qalığa ədəd əlavə edir (təhlükəsiz: server toplayır, iki sorğu bir-birini silmir). */
-export function addQuantity(
+/** Qalığa ədəd əlavə edir (təhlükəsiz: server toplayır). Yeni qalığı qaytarır. */
+export async function addQuantity(
   db: Queryable,
   productId: number,
   locationId: number,
   amount: number,
 ): Promise<number> {
-  return execute(
+  const row = await queryOne<{ quantity: number }>(
     db,
     `INSERT INTO product_stock (product_id, location_id, quantity) VALUES ($1, $2, $3)
      ON CONFLICT (product_id, location_id)
-     DO UPDATE SET quantity = product_stock.quantity + EXCLUDED.quantity, updated_at = now()`,
+     DO UPDATE SET quantity = product_stock.quantity + EXCLUDED.quantity, updated_at = now()
+     RETURNING quantity`,
     [productId, locationId, amount],
   );
+  if (!row) throw new Error('Failed to add stock');
+  return row.quantity;
 }
 
 /** Məhsulun mağazaya aid və silinməmiş olduğunu yoxlayır. */

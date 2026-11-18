@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { locationHeader } from '../../shared/location-context.js';
 import { idParams, messageResponse, paginatedResponse } from '../../shared/schemas.js';
 import {
+  historyQuery,
   lowStockQuery,
   productBody,
   productDto,
@@ -10,6 +11,7 @@ import {
   skuQuery,
   stockBody,
   stockCountsDto,
+  stockMovementDto,
 } from './products.schemas.js';
 import { createProductsService } from './products.service.js';
 
@@ -165,6 +167,7 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
         locationHeader(request),
         request.params.id,
         request.body.quantity,
+        request.body.note,
       );
       return { message: 'Stock updated successfully' };
     },
@@ -190,6 +193,25 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
         locationHeader(request),
         request.params.id,
         request.body.quantity,
+        request.body.note,
       ),
+  );
+
+  app.get(
+    '/:id/history',
+    {
+      onRequest: [ownerOnly],
+      schema: {
+        tags: ['Products'],
+        summary: 'Stock history of a product (owner only, newest first)',
+        description:
+          'Sales, restocks, transfers and manual corrections. Use location_id to see one location.',
+        security: secured,
+        params: idParams,
+        querystring: historyQuery,
+        response: { 200: paginatedResponse(stockMovementDto) },
+      },
+    },
+    async (request) => service.history(request.auth, request.params.id, request.query),
   );
 };

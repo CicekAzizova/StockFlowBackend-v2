@@ -86,6 +86,7 @@ export const stockBody = z.object({
     .number({ error: 'Quantity must be a non-negative integer' })
     .int('Quantity must be a non-negative integer')
     .min(0, 'Quantity must be a non-negative integer'),
+  note: optionalString(200).optional().describe('Reason, shown in the stock history'),
 });
 
 export const restockBody = z.object({
@@ -94,6 +95,7 @@ export const restockBody = z.object({
     .int('Quantity must be a positive integer')
     .min(1, 'Quantity must be a positive integer')
     .max(1_000_000, 'Quantity is too large'),
+  note: optionalString(200).optional().describe('E.g. the supplier, shown in the stock history'),
 });
 
 /** iOS-dakı ProductsResponse modeli bu açarlara güvənir. Silməyin, yalnız əlavə edin. */
@@ -141,3 +143,36 @@ export const stockCountsDto = z.object({
   low_stock: z.number().int().describe('In stock but at or below the low-stock limit'),
   out_of_stock: z.number().int().describe('Quantity is 0'),
 });
+
+export const MOVEMENT_TYPES = [
+  'initial',
+  'sale',
+  'restock',
+  'transfer_in',
+  'transfer_out',
+  'adjustment',
+] as const;
+
+export const historyQuery = paginationQuery.extend({
+  location_id: z.coerce.number().int().positive().optional().describe('Only this location'),
+});
+
+export const stockMovementDto = z.object({
+  id: z.number().int(),
+  type: z.enum(MOVEMENT_TYPES),
+  quantity_change: z.number().int().describe('Negative: stock decreased'),
+  balance_after: z
+    .number()
+    .int()
+    .nullable()
+    .describe('Stock at that location after the change (null for older records)'),
+  location_id: z.number().int(),
+  location_name: z.string(),
+  related_location_name: z.string().nullable().describe('The other side of a transfer'),
+  user_name: z.string().nullable(),
+  receipt_no: z.number().int().nullable().describe('Receipt number for sales'),
+  note: z.string().nullable(),
+  created_at: z.string(),
+});
+
+export type StockMovementDto = z.infer<typeof stockMovementDto>;

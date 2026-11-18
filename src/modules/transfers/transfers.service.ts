@@ -5,6 +5,7 @@ import { requireStoreId } from '../../shared/auth-helpers.js';
 import { formatTimestamp } from '../../shared/formatting.js';
 import { offsetOf, toPage, type PaginationQuery } from '../../shared/schemas.js';
 import * as locations from '../locations/locations.repository.js';
+import * as movements from '../products/stock-movements.repository.js';
 import * as products from '../products/products.repository.js';
 import * as sales from '../sales/sales.repository.js';
 import * as repo from './transfers.repository.js';
@@ -54,13 +55,38 @@ export function createTransfersService(deps: AppDeps) {
           if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
 
           // Mənbədən atomik azaldılır: kifayət qədər qalıq yoxdursa heç nə dəyişmir.
-          if (!(await sales.decrementStock(tx, productId, from.id, quantity))) {
+          const balanceFrom = await sales.decrementStock(tx, productId, from.id, quantity);
+          if (balanceFrom === null) {
             throw badRequest('INSUFFICIENT_STOCK', 'Insufficient stock', {
               product_id: productId,
               available: await sales.stockAt(tx, productId, from.id),
             });
           }
-          await products.addQuantity(tx, productId, to.id, quantity);
+          const balanceTo = await products.addQuantity(tx, productId, to.id, quantity);
+          await movements.recordMovement(tx, {
+            storeId,
+            productId,
+            locationId: from.id,
+            type: 'transfer_out',
+            change: -quantity,
+            balanceAfter: balanceFrom,
+            userId: auth.userId,
+            transferId: id,
+            relatedLocationId: to.id,
+            note: input.note,
+          });
+          await movements.recordMovement(tx, {
+            storeId,
+            productId,
+            locationId: to.id,
+            type: 'transfer_in',
+            change: quantity,
+            balanceAfter: balanceTo,
+            userId: auth.userId,
+            transferId: id,
+            relatedLocationId: from.id,
+            note: input.note,
+          });
           await repo.insertTransferItem(tx, id, {
             productId,
             productName: product.name,
