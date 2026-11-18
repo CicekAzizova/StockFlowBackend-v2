@@ -79,7 +79,7 @@ describe('products CRUD', () => {
     await createProduct(ctx, a, { sku: 'ABC' });
     const dup = await http.post('/products', { name: 'X', sku: 'abc', price: 1 }, a.token);
     expect(dup.status).toBe(409);
-    expect(dup.body.message).toBe('SKU already exists');
+    expect(dup.body.message).toBe('Barcode already exists');
     expect(
       (await http.post('/products', { name: 'X', sku: 'ABC', price: 1 }, b.token)).status,
     ).toBe(201);

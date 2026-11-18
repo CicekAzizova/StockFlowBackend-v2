@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppDeps, AuthContext, Role } from '../../app-types.js';
-import { isUniqueViolation, withTransaction } from '../../db/pool.js';
+import { isUniqueViolation, withTransaction, type Queryable } from '../../db/pool.js';
 import { keysForUrl, thumbnailUrlFor } from '../../infra/images.js';
 import { badRequest, conflict, forbidden, notFound } from '../../shared/errors.js';
 import { requireStoreId } from '../../shared/auth-helpers.js';
@@ -8,6 +8,7 @@ import { resolveLocation } from '../../shared/location-context.js';
 import { formatTimestamp } from '../../shared/formatting.js';
 import { offsetOf, toPage, type PaginationQuery } from '../../shared/schemas.js';
 import * as categories from '../categories/categories.repository.js';
+import * as locationsRepo from '../locations/locations.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as subscriptions from '../subscriptions/subscriptions.repository.js';
 import { isAllowedSubcategory } from '../stores/store-subcategories.js';
@@ -43,11 +44,29 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       weight: row.weight,
       weight_unit: row.weight_unit,
       size: row.size,
+      unit: row.unit,
       subcategory: row.subcategory,
       sold_this_month: row.sold_this_month,
       created_at: formatTimestamp(row.created_at),
       updated_at: formatTimestamp(row.updated_at),
     };
+  }
+
+  /** Başlanğıc qalıq yalnız bu mağazanın məkanlarına yazıla bilər, təkrar məkan olmaz. */
+  async function assertLocationsBelongToStore(
+    db: Queryable,
+    storeId: number,
+    stocks: { location_id: number }[],
+  ): Promise<void> {
+    const ids = [...new Set(stocks.map((s) => s.location_id))];
+    if (ids.length !== stocks.length) {
+      throw badRequest('DUPLICATE_LOCATION', 'Each location can appear only once');
+    }
+    const rows = await locationsRepo.listLocations(db, storeId);
+    const own = new Set(rows.map((l) => l.id));
+    if (ids.some((id) => !own.has(id))) {
+      throw badRequest('LOCATION_NOT_FOUND', 'Location not found');
+    }
   }
 
   /** Yalnız bizim saxlamaya yüklənmiş şəkillərə icazə verilir. */
@@ -169,15 +188,25 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
             weight_unit: body.weight_unit ?? null,
             size: body.size ?? null,
             subcategory: body.subcategory ?? null,
+            unit: body.unit ?? 'piece',
           });
-          if (body.quantity) await repo.setQuantity(tx, id, location.id, body.quantity);
+          if (body.stocks) {
+            await assertLocationsBelongToStore(tx, storeId, body.stocks);
+            for (const stock of body.stocks) {
+              if (stock.quantity > 0) {
+                await repo.setQuantity(tx, id, stock.location_id, stock.quantity);
+              }
+            }
+          } else if (body.quantity) {
+            await repo.setQuantity(tx, id, location.id, body.quantity);
+          }
           const row = await repo.findProductById(tx, storeId, location.id, id);
           if (!row) throw new Error('Product disappeared after insert');
           return toDto(row, auth.role, location.id);
         });
       } catch (error) {
         if (isUniqueViolation(error, 'products_store_sku_uq')) {
-          throw conflict('SKU_ALREADY_EXISTS', 'SKU already exists');
+          throw conflict('SKU_ALREADY_EXISTS', 'Barcode already exists');
         }
         throw error;
       }
@@ -216,6 +245,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
             weight: body.weight,
             weight_unit: body.weight_unit,
             size: body.size,
+            unit: body.unit,
             subcategory: body.subcategory,
           };
           const categoryId = await categoryIdFor(tx, storeId, body.category);
@@ -243,7 +273,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
         return dto;
       } catch (error) {
         if (isUniqueViolation(error, 'products_store_sku_uq')) {
-          throw conflict('SKU_ALREADY_EXISTS', 'SKU already exists');
+          throw conflict('SKU_ALREADY_EXISTS', 'Barcode already exists');
         }
         throw error;
       }
