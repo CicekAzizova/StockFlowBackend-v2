@@ -206,7 +206,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
         });
       } catch (error) {
         if (isUniqueViolation(error, 'products_store_sku_uq')) {
-          throw conflict('SKU_ALREADY_EXISTS', 'SKU already exists');
+          throw conflict('SKU_ALREADY_EXISTS', 'Barcode already exists');
         }
         throw error;
       }
@@ -273,7 +273,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
         return dto;
       } catch (error) {
         if (isUniqueViolation(error, 'products_store_sku_uq')) {
-          throw conflict('SKU_ALREADY_EXISTS', 'SKU already exists');
+          throw conflict('SKU_ALREADY_EXISTS', 'Barcode already exists');
         }
         throw error;
       }

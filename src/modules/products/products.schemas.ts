@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { optionalString, paginationQuery, requiredString } from '../../shared/schemas.js';
 
-const REQUIRED = 'Name, SKU and price are required';
+const REQUIRED = 'Name, barcode and price are required';
 
 /** Pul məbləği: mənfi olmayan, ən çoxu iki onluq. */
 const money = (message: string) =>
