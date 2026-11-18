@@ -25,7 +25,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
   const { pool, storage } = deps;
 
   /** Satıcı maya dəyərini görməməlidir, ona görə 0 qaytarılır. */
-  function toDto(row: ProductRow, role: Role, locationId: number): ProductDto {
+  function toDto(row: ProductRow, role: Role): ProductDto {
     return {
       id: row.id,
       name: row.name,
@@ -36,8 +36,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       discount: row.discount,
       cost_price: role === 'OWNER' ? row.cost_price : 0,
       quantity: row.quantity,
-      stocks:
-        role === 'OWNER' ? row.stocks : row.stocks.filter((s) => s.location_id === locationId),
+      stocks: row.stocks,
       low_stock_limit: row.low_stock_limit,
       image_url: row.image_urls[0] ?? null,
       image_urls: row.image_urls,
@@ -46,6 +45,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       weight_unit: row.weight_unit,
       size: row.size,
       unit: row.unit,
+      for_sale: row.for_sale,
       subcategory: row.subcategory,
       sold_this_month: row.sold_this_month,
       created_at: formatTimestamp(row.created_at),
@@ -121,7 +121,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       offset: offsetOf(query),
     });
     return toPage(
-      rows.map((row) => toDto(row, auth.role, location.id)),
+      rows.map((row) => toDto(row, auth.role)),
       total,
       query,
     );
@@ -145,7 +145,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       const location = await resolveLocation(pool, auth, storeId, header);
       const row = await repo.findProductById(pool, storeId, location.id, id);
       if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
-      return toDto(row, auth.role, location.id);
+      return toDto(row, auth.role);
     },
 
     async getBySku(auth: AuthContext, header: Header, sku: string): Promise<ProductDto> {
@@ -153,7 +153,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       const location = await resolveLocation(pool, auth, storeId, header);
       const row = await repo.findProductBySku(pool, storeId, location.id, sku);
       if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
-      return toDto(row, auth.role, location.id);
+      return toDto(row, auth.role);
     },
 
     async create(auth: AuthContext, header: Header, body: ProductBody): Promise<ProductDto> {
@@ -210,7 +210,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
           }
           const row = await repo.findProductById(tx, storeId, location.id, id);
           if (!row) throw new Error('Product disappeared after insert');
-          return toDto(row, auth.role, location.id);
+          return toDto(row, auth.role);
         });
       } catch (error) {
         if (isUniqueViolation(error, 'products_store_sku_uq')) {
@@ -282,7 +282,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
           }
           const row = await repo.findProductById(tx, storeId, location.id, id);
           if (!row) throw new Error('Product disappeared after update');
-          return toDto(row, auth.role, location.id);
+          return toDto(row, auth.role);
         });
 
         // Siyahıdan çıxarılan şəkillər saxlamadan silinir (xəta olsa yalnız loga yazılır).
@@ -299,6 +299,22 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
         }
         throw error;
       }
+    },
+
+    async setForSale(
+      auth: AuthContext,
+      header: Header,
+      id: number,
+      forSale: boolean,
+    ): Promise<ProductDto> {
+      const storeId = requireStoreId(auth);
+      const location = await resolveLocation(pool, auth, storeId, header);
+      if ((await repo.setForSale(pool, storeId, id, forSale)) === 0) {
+        throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+      }
+      const row = await repo.findProductById(pool, storeId, location.id, id);
+      if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+      return toDto(row, auth.role);
     },
 
     async remove(auth: AuthContext, id: number): Promise<void> {
@@ -333,7 +349,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       });
       const row = await repo.findProductById(pool, storeId, location.id, id);
       if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
-      return toDto(row, auth.role, location.id);
+      return toDto(row, auth.role);
     },
 
     async setStock(

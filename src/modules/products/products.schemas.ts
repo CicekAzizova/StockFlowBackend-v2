@@ -89,6 +89,10 @@ export const stockBody = z.object({
   note: optionalString(200).optional().describe('Reason, shown in the stock history'),
 });
 
+export const forSaleBody = z.object({
+  for_sale: z.boolean({ error: 'for_sale must be true or false' }),
+});
+
 export const restockBody = z.object({
   quantity: z
     .number({ error: 'Quantity must be a positive integer' })
@@ -128,6 +132,7 @@ export const productDto = z.object({
   weight: z.number().nullable(),
   weight_unit: z.enum(WEIGHT_UNITS).nullable(),
   unit: z.enum(PRODUCT_UNITS),
+  for_sale: z.boolean().describe('false: hidden from sales, stock and history are kept'),
   size: z.string().nullable(),
   subcategory: z.string().nullable().describe('Catalog code such as food.dairy'),
   sold_this_month: z.number().int().describe('Units sold this month (store time zone)'),

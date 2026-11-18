@@ -2,6 +2,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { locationHeader } from '../../shared/location-context.js';
 import { idParams, messageResponse, paginatedResponse } from '../../shared/schemas.js';
 import {
+  forSaleBody,
   historyQuery,
   lowStockQuery,
   productBody,
@@ -128,6 +129,31 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request) =>
       service.update(request.auth, locationHeader(request), request.params.id, request.body),
+  );
+
+  app.patch(
+    '/:id/for-sale',
+    {
+      onRequest: [ownerOnly],
+      schema: {
+        tags: ['Products'],
+        summary: 'Hide a product from sales or put it back (owner only)',
+        description:
+          'A product that is not for sale cannot be sold (400 PRODUCT_NOT_FOR_SALE). ' +
+          'Its stock and history are kept, and it can still be transferred.',
+        security: secured,
+        params: idParams,
+        body: forSaleBody,
+        response: { 200: productDto },
+      },
+    },
+    async (request) =>
+      service.setForSale(
+        request.auth,
+        locationHeader(request),
+        request.params.id,
+        request.body.for_sale,
+      ),
   );
 
   app.delete(

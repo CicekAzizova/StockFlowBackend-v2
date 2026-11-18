@@ -98,7 +98,7 @@ describe('sales associate location', () => {
     expect(b.status).toBe(404);
   });
 
-  it('shows the associate only the stock of their location and sells from it', async () => {
+  it('shows the associate the stock of every location but sells only from their own', async () => {
     const owner = await registerOwner(ctx);
     const shop = await addLocation(owner, 'Second shop', 'store');
     const p = await createProduct(ctx, owner, { price: 10, quantity: 5 });
@@ -110,7 +110,8 @@ describe('sales associate location', () => {
 
     const seen = (await http.get(`/products/${p.id}`, seller.token)).body;
     expect(seen.quantity).toBe(3);
-    expect(seen.stocks).toHaveLength(1);
+    expect(seen.stocks).toHaveLength(2);
+    expect(seen.stocks.map((s: { quantity: number }) => s.quantity)).toEqual([5, 3]);
 
     const sale = await http.post('/sales', { product_id: p.id, quantity: 2 }, seller.token);
     expect(sale.status).toBe(201);

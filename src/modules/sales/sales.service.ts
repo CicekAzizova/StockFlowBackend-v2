@@ -72,6 +72,11 @@ export function createSalesService(deps: AppDeps) {
         for (const [productId, quantity] of lines) {
           const product = await repo.findProductForSale(tx, storeId, productId);
           if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+          if (!product.for_sale) {
+            throw badRequest('PRODUCT_NOT_FOR_SALE', 'This product is not for sale', {
+              product_id: productId,
+            });
+          }
           const balance = await repo.decrementStock(tx, productId, location.id, quantity);
           if (balance === null) {
             throw badRequest('INSUFFICIENT_STOCK', 'Insufficient stock', {
