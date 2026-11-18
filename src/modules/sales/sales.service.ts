@@ -6,6 +6,7 @@ import { requireStoreId } from '../../shared/auth-helpers.js';
 import { resolveLocation } from '../../shared/location-context.js';
 import { discountedPrice, formatTimestamp, roundMoney } from '../../shared/formatting.js';
 import { offsetOf, toPage, type PaginationQuery } from '../../shared/schemas.js';
+import * as movements from '../products/stock-movements.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as repo from './sales.repository.js';
 import type { SaleRow } from './sales.repository.js';
@@ -66,16 +67,19 @@ export function createSalesService(deps: AppDeps) {
 
       const saleId = await withTransaction(pool, async (tx) => {
         const items: repo.SaleItemRow[] = [];
+        const balances = new Map<number, number>();
 
         for (const [productId, quantity] of lines) {
           const product = await repo.findProductForSale(tx, storeId, productId);
           if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
-          if (!(await repo.decrementStock(tx, productId, location.id, quantity))) {
+          const balance = await repo.decrementStock(tx, productId, location.id, quantity);
+          if (balance === null) {
             throw badRequest('INSUFFICIENT_STOCK', 'Insufficient stock', {
               product_id: productId,
               available: await repo.stockAt(tx, productId, location.id),
             });
           }
+          balances.set(productId, balance);
           const unitPrice = discountedPrice(product.price, product.discount);
           items.push({
             product_id: product.id,
@@ -98,7 +102,19 @@ export function createSalesService(deps: AppDeps) {
           totalPrice: total,
           note: input.note,
         });
-        for (const item of items) await repo.insertSaleItem(tx, sale.id, item);
+        for (const item of items) {
+          await repo.insertSaleItem(tx, sale.id, item);
+          await movements.recordMovement(tx, {
+            storeId,
+            productId: item.product_id,
+            locationId: location.id,
+            type: 'sale',
+            change: -item.quantity,
+            balanceAfter: balances.get(item.product_id) ?? 0,
+            userId: auth.userId,
+            saleId: sale.id,
+          });
+        }
         return sale.id;
       });
 

@@ -124,13 +124,14 @@ export function findProductForSale(
 /**
  * Məkandakı qalığı atomik azaldır: yalnız kifayət qədər qalıq varsa sətir yenilənir.
  * İki satıcı eyni anda son ədədi almağa çalışsa yalnız biri uğur qazanır.
+ * Yeni qalığı qaytarır, kifayət qədər qalıq yoxdursa null.
  */
 export async function decrementStock(
   tx: Queryable,
   productId: number,
   locationId: number,
   quantity: number,
-): Promise<boolean> {
+): Promise<number | null> {
   const row = await queryOne<{ quantity: number }>(
     tx,
     `UPDATE product_stock SET quantity = quantity - $3, updated_at = now()
@@ -138,7 +139,7 @@ export async function decrementStock(
      RETURNING quantity`,
     [productId, locationId, quantity],
   );
-  return row !== null;
+  return row?.quantity ?? null;
 }
 
 export async function stockAt(

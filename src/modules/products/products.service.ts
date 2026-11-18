@@ -12,9 +12,10 @@ import * as locationsRepo from '../locations/locations.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as subscriptions from '../subscriptions/subscriptions.repository.js';
 import { isAllowedSubcategory } from '../stores/store-subcategories.js';
+import * as movements from './stock-movements.repository.js';
 import * as repo from './products.repository.js';
 import type { ProductFilters, ProductRow, ProductWrite } from './products.repository.js';
-import type { ProductBody, ProductDto } from './products.schemas.js';
+import type { ProductBody, ProductDto, StockMovementDto } from './products.schemas.js';
 
 type Header = string | string[] | undefined;
 
@@ -190,15 +191,22 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
             subcategory: body.subcategory ?? null,
             unit: body.unit ?? 'piece',
           });
-          if (body.stocks) {
-            await assertLocationsBelongToStore(tx, storeId, body.stocks);
-            for (const stock of body.stocks) {
-              if (stock.quantity > 0) {
-                await repo.setQuantity(tx, id, stock.location_id, stock.quantity);
-              }
-            }
-          } else if (body.quantity) {
-            await repo.setQuantity(tx, id, location.id, body.quantity);
+          const startingStocks = body.stocks ?? [
+            { location_id: location.id, quantity: body.quantity ?? 0 },
+          ];
+          if (body.stocks) await assertLocationsBelongToStore(tx, storeId, body.stocks);
+          for (const stock of startingStocks) {
+            if (stock.quantity <= 0) continue;
+            const { balance } = await repo.setQuantity(tx, id, stock.location_id, stock.quantity);
+            await movements.recordMovement(tx, {
+              storeId,
+              productId: id,
+              locationId: stock.location_id,
+              type: 'initial',
+              change: stock.quantity,
+              balanceAfter: balance,
+              userId: auth.userId,
+            });
           }
           const row = await repo.findProductById(tx, storeId, location.id, id);
           if (!row) throw new Error('Product disappeared after insert');
@@ -253,7 +261,21 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
 
           await repo.updateProduct(tx, storeId, id, fields);
           if (body.quantity !== undefined) {
-            await repo.setQuantity(tx, id, location.id, body.quantity);
+            const { previous, balance } = await repo.setQuantity(
+              tx,
+              id,
+              location.id,
+              body.quantity,
+            );
+            await movements.recordMovement(tx, {
+              storeId,
+              productId: id,
+              locationId: location.id,
+              type: 'adjustment',
+              change: balance - previous,
+              balanceAfter: balance,
+              userId: auth.userId,
+            });
           }
           if (body.image_urls) {
             removedImages = existing.image_urls.filter((url) => !body.image_urls?.includes(url));
@@ -289,25 +311,76 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
       header: Header,
       id: number,
       amount: number,
+      note?: string,
     ): Promise<ProductDto> {
       const storeId = requireStoreId(auth);
       const location = await resolveLocation(pool, auth, storeId, header);
       if (!(await repo.productIsActive(pool, storeId, id))) {
         throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
       }
-      await repo.addQuantity(pool, id, location.id, amount);
+      await withTransaction(pool, async (tx) => {
+        const balance = await repo.addQuantity(tx, id, location.id, amount);
+        await movements.recordMovement(tx, {
+          storeId,
+          productId: id,
+          locationId: location.id,
+          type: 'restock',
+          change: amount,
+          balanceAfter: balance,
+          userId: auth.userId,
+          note,
+        });
+      });
       const row = await repo.findProductById(pool, storeId, location.id, id);
       if (!row) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
       return toDto(row, auth.role, location.id);
     },
 
-    async setStock(auth: AuthContext, header: Header, id: number, quantity: number): Promise<void> {
+    async setStock(
+      auth: AuthContext,
+      header: Header,
+      id: number,
+      quantity: number,
+      note?: string,
+    ): Promise<void> {
       const storeId = requireStoreId(auth);
       const location = await resolveLocation(pool, auth, storeId, header);
       if (!(await repo.productIsActive(pool, storeId, id))) {
         throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
       }
-      await repo.setQuantity(pool, id, location.id, quantity);
+      await withTransaction(pool, async (tx) => {
+        const { previous, balance } = await repo.setQuantity(tx, id, location.id, quantity);
+        await movements.recordMovement(tx, {
+          storeId,
+          productId: id,
+          locationId: location.id,
+          type: 'adjustment',
+          change: balance - previous,
+          balanceAfter: balance,
+          userId: auth.userId,
+          note,
+        });
+      });
+    },
+
+    async history(
+      auth: AuthContext,
+      id: number,
+      query: PaginationQuery & { location_id?: number | undefined },
+    ) {
+      const storeId = requireStoreId(auth);
+      if (!(await repo.productIsActive(pool, storeId, id))) {
+        throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+      }
+      const { rows, total } = await movements.listMovements(pool, storeId, id, query.location_id, {
+        limit: query.limit,
+        offset: offsetOf(query),
+      });
+      const items: StockMovementDto[] = rows.map((row) => ({
+        ...row,
+        created_at: formatTimestamp(row.created_at),
+      }));
+      return toPage(items, total, query);
     },
   };
 }
