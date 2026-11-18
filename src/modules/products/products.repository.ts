@@ -27,6 +27,7 @@ export interface ProductRow {
   weight_unit: 'mg' | 'g' | 'kg' | 'ml' | 'l' | null;
   size: string | null;
   unit: 'piece' | 'kg' | 'l' | 'pack';
+  for_sale: boolean;
   /** Kataloq kodu (məs. food.dairy) və ya null. */
   subcategory: string | null;
   /** Bu ay (mağazanın saat qurşağı ilə) satılan ədəd sayı. */
@@ -49,7 +50,7 @@ const QTY = 'COALESCE(ps.quantity, 0)';
 const select = (locParam: string) => `
   SELECT p.id, p.store_id, p.name, p.sku, COALESCE(c.name, '') AS category, p.description,
          p.price, p.discount, p.cost_price, ${QTY} AS quantity, p.low_stock_limit, p.image_urls,
-         p.weight, p.weight_unit, p.size, p.unit, p.subcategory, p.created_at, p.updated_at,
+         p.weight, p.weight_unit, p.size, p.unit, p.for_sale, p.subcategory, p.created_at, p.updated_at,
          COALESCE((
            SELECT json_agg(json_build_object(
                     'location_id', l.id, 'location_name', l.name,
@@ -319,4 +320,19 @@ export async function countByStock(
     [storeId, locationId],
   );
   return row ?? { total: 0, in_stock: 0, low_stock: 0, out_of_stock: 0 };
+}
+
+/** Məhsulu satışa qoyur və ya satışdan çıxarır. */
+export function setForSale(
+  db: Queryable,
+  storeId: number,
+  id: number,
+  forSale: boolean,
+): Promise<number> {
+  return execute(
+    db,
+    `UPDATE products SET for_sale = $3, updated_at = now()
+     WHERE id = $1 AND store_id = $2 AND deleted_at IS NULL`,
+    [id, storeId, forSale],
+  );
 }

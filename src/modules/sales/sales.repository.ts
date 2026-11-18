@@ -105,6 +105,7 @@ export interface ProductForSale {
   sku: string;
   price: number;
   discount: number;
+  for_sale: boolean;
 }
 
 /** Satıla bilən (silinməmiş) məhsul məlumatı. */
@@ -115,7 +116,7 @@ export function findProductForSale(
 ): Promise<ProductForSale | null> {
   return queryOne<ProductForSale>(
     tx,
-    `SELECT id, name, sku, price, discount FROM products
+    `SELECT id, name, sku, price, discount, for_sale FROM products
      WHERE id = $1 AND store_id = $2 AND deleted_at IS NULL`,
     [productId, storeId],
   );

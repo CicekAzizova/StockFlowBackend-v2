@@ -260,3 +260,54 @@ describe('plan limit', () => {
     }
   });
 });
+
+describe('product for sale switch', () => {
+  it('hides a product from sales without touching its stock', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { quantity: 10 });
+    expect((await http.get(`/products/${p.id}`, owner.token)).body.for_sale).toBe(true);
+
+    const off = await http.patch(`/products/${p.id}/for-sale`, { for_sale: false }, owner.token);
+    expect(off.status).toBe(200);
+    expect(off.body).toMatchObject({ for_sale: false, quantity: 10 });
+
+    const sale = await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+    expect(sale.status).toBe(400);
+    expect(sale.body.code).toBe('PRODUCT_NOT_FOR_SALE');
+
+    const on = await http.patch(`/products/${p.id}/for-sale`, { for_sale: true }, owner.token);
+    expect(on.body.for_sale).toBe(true);
+    expect((await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token)).status).toBe(
+      201,
+    );
+  });
+
+  it('can still be transferred and is owner only', async () => {
+    const owner = await registerOwner(ctx);
+    const warehouse = (await http.post('/locations', { name: 'W', kind: 'warehouse' }, owner.token))
+      .body.id as number;
+    const main = (await http.get('/locations', owner.token)).body[0].id as number;
+    const p = await createProduct(ctx, owner, { quantity: 5 });
+    await http.patch(`/products/${p.id}/for-sale`, { for_sale: false }, owner.token);
+
+    const moved = await http.post(
+      '/transfers',
+      {
+        from_location_id: main,
+        to_location_id: warehouse,
+        items: [{ product_id: p.id, quantity: 2 }],
+      },
+      owner.token,
+    );
+    expect(moved.status).toBe(201);
+
+    const seller = await createAssociate(ctx, owner);
+    expect(
+      (await http.patch(`/products/${p.id}/for-sale`, { for_sale: true }, seller.token)).status,
+    ).toBe(403);
+    expect(
+      (await http.patch(`/products/999999/for-sale`, { for_sale: true }, owner.token)).status,
+    ).toBe(404);
+    expect((await http.patch(`/products/${p.id}/for-sale`, {}, owner.token)).status).toBe(400);
+  });
+});
