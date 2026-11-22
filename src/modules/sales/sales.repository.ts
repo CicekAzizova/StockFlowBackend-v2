@@ -10,6 +10,8 @@ export interface SaleItemRow {
   quantity: number;
   unit_price: number;
   line_total: number;
+  /** Satış anındakı alış qiyməti (bir vahid), məlum deyilsə null. */
+  unit_cost?: number | null;
   /** Yalnız oxuma zamanı doldurulur: məhsulun ilk şəkli (məhsul silinibsə null). */
   product_image_url?: string | null;
 }
@@ -105,6 +107,7 @@ export interface ProductForSale {
   sku: string;
   price: number;
   discount: number;
+  cost_price: number | null;
   for_sale: boolean;
 }
 
@@ -116,7 +119,7 @@ export function findProductForSale(
 ): Promise<ProductForSale | null> {
   return queryOne<ProductForSale>(
     tx,
-    `SELECT id, name, sku, price, discount, for_sale FROM products
+    `SELECT id, name, sku, price, discount, cost_price, for_sale FROM products
      WHERE id = $1 AND store_id = $2 AND deleted_at IS NULL`,
     [productId, storeId],
   );
@@ -192,8 +195,8 @@ export async function insertSaleItem(
   item: SaleItemRow,
 ): Promise<void> {
   await tx.query(
-    `INSERT INTO sale_items (sale_id, product_id, product_name, sku, quantity, unit_price, line_total)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    `INSERT INTO sale_items (sale_id, product_id, product_name, sku, quantity, unit_price, line_total, unit_cost)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       saleId,
       item.product_id,
@@ -202,6 +205,7 @@ export async function insertSaleItem(
       item.quantity,
       item.unit_price,
       item.line_total,
+      item.unit_cost ?? null,
     ],
   );
 }

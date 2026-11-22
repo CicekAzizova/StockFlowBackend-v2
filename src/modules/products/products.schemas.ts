@@ -31,7 +31,8 @@ export const productBody = z.object({
     .min(0, 'Discount must be between 0 and 100')
     .max(100, 'Discount must be between 0 and 100')
     .optional(),
-  cost_price: money('Cost price must be a valid non-negative number').optional(),
+  /** null = alış qiyməti məlum deyil (yeniləmədə null köhnə dəyəri silir). */
+  cost_price: money('Cost price must be a valid non-negative number').nullable().optional(),
   /** Seçilmiş məkandakı qalıq (X-Location-Id, yoxdursa əsas məkan). */
   quantity: z
     .number({ error: 'Quantity must be a non-negative integer' })
@@ -111,7 +112,10 @@ export const productDto = z.object({
   description: z.string(),
   price: z.number(),
   discount: z.number(),
-  cost_price: z.number().describe('Always 0 for sales associates'),
+  cost_price: z
+    .number()
+    .nullable()
+    .describe('null when unknown (owner only). Always 0 for sales associates'),
   quantity: z
     .number()
     .int()

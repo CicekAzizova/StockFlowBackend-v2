@@ -93,6 +93,7 @@ export function createSalesService(deps: AppDeps) {
             quantity,
             unit_price: unitPrice,
             line_total: roundMoney(unitPrice * quantity),
+            unit_cost: product.cost_price,
           });
         }
 
