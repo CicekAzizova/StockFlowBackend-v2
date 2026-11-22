@@ -16,7 +16,7 @@ export interface ProductRow {
   description: string;
   price: number;
   discount: number;
-  cost_price: number;
+  cost_price: number | null;
   /** Seçilmiş məkandakı qalıq. */
   quantity: number;
   /** Mağazanın bütün məkanlarındakı qalıq. */
@@ -153,7 +153,7 @@ export interface ProductWrite {
   description: string;
   price: number;
   discount: number;
-  cost_price: number;
+  cost_price: number | null;
   low_stock_limit: number;
   image_urls: string[];
   weight: number | null;

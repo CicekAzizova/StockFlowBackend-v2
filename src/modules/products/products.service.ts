@@ -182,7 +182,7 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
             description: body.description ?? '',
             price: body.price,
             discount: body.discount ?? 0,
-            cost_price: body.cost_price ?? 0,
+            cost_price: body.cost_price ?? null,
             low_stock_limit: body.low_stock_limit ?? 5,
             image_urls: body.image_urls ?? [],
             weight: body.weight ?? null,

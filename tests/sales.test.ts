@@ -249,7 +249,8 @@ describe('history and summary', () => {
     expect((await http.get('/sales', s1.token)).body.total).toBe(1);
     expect((await http.get(`/sales?seller_id=${s2.id}`, owner.token)).body.total).toBe(1);
 
-    const today = new Date().toISOString().slice(0, 10);
+    // Mağaza vaxtı Asia/Baku-dur: "bu gün" UTC ilə yox, onunla hesablanmalıdır.
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Baku' });
     expect((await http.get(`/sales?from=${today}&to=${today}`, owner.token)).body.total).toBe(3);
     expect((await http.get('/sales?from=2001-01-01&to=2001-01-02', owner.token)).body.total).toBe(
       0,
