@@ -15,6 +15,16 @@ const PERIODS: Record<SalesReportQuery['period'], { granularity: Granularity; co
   year: { granularity: 'month', count: 12 },
 };
 
+function toBucket(row: BucketRow) {
+  return {
+    label: row.label,
+    revenue: roundMoney(row.revenue),
+    profit: roundMoney(row.profit),
+    orders: row.orders,
+    items_sold: row.items_sold,
+  };
+}
+
 function sum(rows: BucketRow[]) {
   return {
     revenue: roundMoney(rows.reduce((total, row) => total + row.revenue, 0)),
@@ -27,6 +37,47 @@ function sum(rows: BucketRow[]) {
 export function createReportsService(deps: AppDeps) {
   const { pool, config } = deps;
 
+  /**
+   * Bir təqvim ili: yanvar-dekabr. Müqayisə keçən ilin eyni aylarıdır
+   * (cari ildə yanvardan bu aya qədər, keçmiş ildə bütün 12 ay).
+   */
+  async function calendarYear(
+    storeId: number,
+    timezone: string,
+    year: number,
+    locationId: number | undefined,
+  ) {
+    const [years, current, previousYear, byLocation] = await Promise.all([
+      repo.reportYears(pool, { storeId, timezone, locationId }),
+      repo.salesBucketsForYear(pool, { storeId, timezone, year, locationId }),
+      repo.salesBucketsForYear(pool, { storeId, timezone, year: year - 1, locationId }),
+      locationId === undefined
+        ? repo.salesByLocationForYear(pool, { storeId, timezone, year })
+        : Promise.resolve([]),
+    ]);
+    const months = year === years.current_year ? years.current_month : 12;
+
+    return {
+      period: 'year' as const,
+      first_year: Math.min(years.first_year, years.current_year),
+      from: current[0]?.label ?? '',
+      to: current[current.length - 1]?.label ?? '',
+      ...sum(current),
+      unknown_cost_revenue: roundMoney(
+        current.reduce((total, row) => total + row.unknown_cost_revenue, 0),
+      ),
+      previous: sum(previousYear.slice(0, months)),
+      by_location: byLocation.map((row) => ({
+        location_id: Number(row.location_id),
+        name: row.name,
+        revenue: roundMoney(row.revenue),
+        profit: roundMoney(row.profit),
+        orders: row.orders,
+      })),
+      buckets: current.map(toBucket),
+    };
+  }
+
   return {
     async sales(auth: AuthContext, query: SalesReportQuery) {
       const storeId = requireStoreId(auth);
@@ -38,18 +89,24 @@ export function createReportsService(deps: AppDeps) {
         if (!found) throw notFound('LOCATION_NOT_FOUND', 'Location not found');
       }
 
+      if (query.period === 'year' && query.year !== undefined) {
+        return calendarYear(storeId, timezone, query.year, query.location_id);
+      }
+
       const { granularity, count } = PERIODS[query.period];
       const base = { storeId, timezone, granularity, count, locationId: query.location_id };
-      const [current, previous, byLocation] = await Promise.all([
+      const [current, previous, byLocation, years] = await Promise.all([
         repo.salesBuckets(pool, { ...base, window: 0 }),
         repo.salesBuckets(pool, { ...base, window: 1 }),
         query.location_id === undefined
           ? repo.salesByLocation(pool, { storeId, timezone, granularity, count })
           : Promise.resolve([]),
+        repo.reportYears(pool, { storeId, timezone, locationId: query.location_id }),
       ]);
 
       return {
         period: query.period,
+        first_year: Math.min(years.first_year, years.current_year),
         from: current[0]?.label ?? '',
         to: current[current.length - 1]?.label ?? '',
         ...sum(current),
@@ -64,13 +121,7 @@ export function createReportsService(deps: AppDeps) {
           profit: roundMoney(row.profit),
           orders: row.orders,
         })),
-        buckets: current.map((row) => ({
-          label: row.label,
-          revenue: roundMoney(row.revenue),
-          profit: roundMoney(row.profit),
-          orders: row.orders,
-          items_sold: row.items_sold,
-        })),
+        buckets: current.map(toBucket),
       };
     },
   };

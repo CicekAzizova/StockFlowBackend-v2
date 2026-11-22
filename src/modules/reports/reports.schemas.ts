@@ -4,6 +4,13 @@ export const REPORT_PERIODS = ['week', 'month', 'year'] as const;
 
 export const salesReportQuery = z.object({
   period: z.enum(REPORT_PERIODS, { error: 'period must be week, month or year' }).default('week'),
+  year: z.coerce
+    .number({ error: 'year must be a year such as 2026' })
+    .int({ error: 'year must be a year such as 2026' })
+    .min(2000, { error: 'year must be a year such as 2026' })
+    .max(2100, { error: 'year must be a year such as 2026' })
+    .optional()
+    .describe('Only used with period=year: show that calendar year (January to December)'),
   location_id: z.coerce
     .number({ error: 'location_id must be a positive integer' })
     .int({ error: 'location_id must be a positive integer' })
@@ -22,6 +29,12 @@ const totals = {
 
 export const salesReportResponse = z.object({
   period: z.enum(REPORT_PERIODS),
+  first_year: z
+    .number()
+    .int()
+    .describe(
+      'Year of the first sale (current year if there are none). Earliest year to scroll to',
+    ),
   from: z.string().describe('First bucket: YYYY-MM-DD (week, month) or YYYY-MM (year)'),
   to: z.string().describe('Last bucket, the current day or month'),
   ...totals,
