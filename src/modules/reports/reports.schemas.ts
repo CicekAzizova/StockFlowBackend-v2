@@ -31,6 +31,19 @@ export const salesReportResponse = z.object({
   previous: z
     .object(totals)
     .describe('The same totals for the period of equal length right before this one'),
+  by_location: z
+    .array(
+      z.object({
+        location_id: z.number().int(),
+        name: z.string(),
+        revenue: totals.revenue,
+        profit: totals.profit,
+        orders: z.number().int(),
+      }),
+    )
+    .describe(
+      'Revenue per place, biggest first. Only when no `location_id` filter is set, otherwise empty.',
+    ),
   buckets: z
     .array(
       z.object({

@@ -70,3 +70,52 @@ export function salesBuckets(
     ],
   );
 }
+
+export interface LocationRow {
+  location_id: number;
+  name: string;
+  revenue: number;
+  profit: number;
+  orders: number;
+}
+
+/**
+ * Cari dövr üçün hər məkanın gəliri, qazancı və satış sayı (mağaza vaxtı ilə).
+ * Satışı olmayan mağaza növlü məkanlar da sıfırla qaytarılır. Ən çox gəlirli birinci.
+ */
+export function salesByLocation(
+  db: Queryable,
+  input: { storeId: number; timezone: string; granularity: Granularity; count: number },
+): Promise<LocationRow[]> {
+  return queryMany<LocationRow>(
+    db,
+    `WITH today AS (SELECT (now() AT TIME ZONE $2)::date AS day),
+          step AS (
+            SELECT CASE WHEN $3 = 'month' THEN interval '1 month' ELSE interval '1 day' END AS size
+          ),
+          base AS (
+            SELECT CASE WHEN $3 = 'month' THEN date_trunc('month', day)::date ELSE day END AS cur
+            FROM today
+          ),
+          bounds AS (
+            SELECT (base.cur - ($4::int - 1) * step.size)::date AS first_day FROM base, step
+          )
+     SELECT l.id AS location_id,
+            l.name,
+            COALESCE(SUM(si.line_total), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN si.unit_cost IS NOT NULL
+                              THEN si.line_total - si.unit_cost * si.quantity END), 0) AS profit,
+            COUNT(DISTINCT s.id) AS orders
+     FROM locations l
+     LEFT JOIN sales s
+       ON s.location_id = l.id
+      AND s.store_id = $1
+      AND s.created_at >= (SELECT first_day FROM bounds)::timestamp AT TIME ZONE $2
+     LEFT JOIN sale_items si ON si.sale_id = s.id
+     WHERE l.store_id = $1
+     GROUP BY l.id, l.name, l.kind
+     HAVING l.kind = 'store' OR COUNT(s.id) > 0
+     ORDER BY revenue DESC, l.id`,
+    [input.storeId, input.timezone, input.granularity, input.count],
+  );
+}

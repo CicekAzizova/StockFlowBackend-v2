@@ -40,9 +40,12 @@ export function createReportsService(deps: AppDeps) {
 
       const { granularity, count } = PERIODS[query.period];
       const base = { storeId, timezone, granularity, count, locationId: query.location_id };
-      const [current, previous] = await Promise.all([
+      const [current, previous, byLocation] = await Promise.all([
         repo.salesBuckets(pool, { ...base, window: 0 }),
         repo.salesBuckets(pool, { ...base, window: 1 }),
+        query.location_id === undefined
+          ? repo.salesByLocation(pool, { storeId, timezone, granularity, count })
+          : Promise.resolve([]),
       ]);
 
       return {
@@ -54,6 +57,13 @@ export function createReportsService(deps: AppDeps) {
           current.reduce((total, row) => total + row.unknown_cost_revenue, 0),
         ),
         previous: sum(previous),
+        by_location: byLocation.map((row) => ({
+          location_id: Number(row.location_id),
+          name: row.name,
+          revenue: roundMoney(row.revenue),
+          profit: roundMoney(row.profit),
+          orders: row.orders,
+        })),
         buckets: current.map((row) => ({
           label: row.label,
           revenue: roundMoney(row.revenue),
