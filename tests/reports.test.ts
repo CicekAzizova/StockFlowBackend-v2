@@ -133,6 +133,78 @@ describe('sales report', () => {
     ).toBe(404);
   });
 
+  it('lists revenue per location, biggest first, only without a location filter', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50, cost_price: 4 });
+    const shop = (await http.post('/locations', { name: 'Second', kind: 'store' }, owner.token))
+      .body;
+    await http.request('POST', `/products/${p.id}/restock`, {
+      token: owner.token,
+      payload: { quantity: 20 },
+      headers: { 'x-location-id': String(shop.id) },
+    });
+
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+    await http.request('POST', '/sales', {
+      token: owner.token,
+      payload: { product_id: p.id, quantity: 2 },
+      headers: { 'x-location-id': String(shop.id) },
+    });
+
+    const all = await http.get('/reports/sales?period=week', owner.token);
+    expect(all.body.by_location).toHaveLength(2);
+    expect(all.body.by_location[0]).toMatchObject({
+      location_id: shop.id,
+      name: 'Second',
+      revenue: 20,
+      profit: 12,
+      orders: 1,
+    });
+    expect(all.body.by_location[1]).toMatchObject({ revenue: 10, profit: 6, orders: 1 });
+
+    const one = await http.get(`/reports/sales?period=week&location_id=${shop.id}`, owner.token);
+    expect(one.body.by_location).toEqual([]);
+  });
+
+  it('shows a calendar year and compares with the same months of the year before', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50, cost_price: 4 });
+    const thisYear = Number(
+      new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Baku' }).slice(0, 4),
+    );
+
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+    const old = await http.post('/sales', { product_id: p.id, quantity: 2 }, owner.token);
+    await ctx.pool.query(
+      "UPDATE sales SET created_at = created_at - interval '2 years' WHERE id = $1",
+      [old.body.saleId],
+    );
+
+    const now = await http.get(`/reports/sales?period=year&year=${thisYear}`, owner.token);
+    expect(now.status).toBe(200);
+    expect(now.body.buckets).toHaveLength(12);
+    expect(now.body.buckets[0].label).toBe(`${thisYear}-01`);
+    expect(now.body.buckets[11].label).toBe(`${thisYear}-12`);
+    expect(now.body).toMatchObject({
+      first_year: thisYear - 2,
+      revenue: 10,
+      profit: 6,
+      orders: 1,
+      previous: { revenue: 0, orders: 0 },
+    });
+    expect(now.body.by_location).toHaveLength(1);
+    expect(now.body.by_location[0]).toMatchObject({ revenue: 10, orders: 1 });
+
+    const old2 = await http.get(`/reports/sales?period=year&year=${thisYear - 2}`, owner.token);
+    expect(old2.body).toMatchObject({ revenue: 20, orders: 1, first_year: thisYear - 2 });
+    expect(old2.body.by_location[0]).toMatchObject({ revenue: 20 });
+
+    const next = await http.get(`/reports/sales?period=year&year=${thisYear - 1}`, owner.token);
+    expect(next.body).toMatchObject({ revenue: 0, previous: { revenue: 20 } });
+
+    expect((await http.get('/reports/sales?period=year&year=abc', owner.token)).status).toBe(400);
+  });
+
   it('is owner-only and validates the period', async () => {
     const owner = await registerOwner(ctx);
     const seller = await createAssociate(ctx, owner);
