@@ -85,6 +85,8 @@ export const saleDto = z.object({
   sold_by: z.number().int(),
   seller_name: z.string(),
   seller_avatar_url: z.string().nullable(),
+  location_id: z.number().int(),
+  location_name: z.string(),
   payment_method: z.enum(PAYMENT_METHODS),
   created_at: z.string().describe('UTC, format yyyy-MM-dd HH:mm:ss'),
   items: z.array(saleItemDto),

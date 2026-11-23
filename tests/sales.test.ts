@@ -317,3 +317,16 @@ describe('seller avatar on sales', () => {
     expect(after.body.items[0].seller_avatar_url).toEqual(expect.stringContaining('avatar'));
   });
 });
+
+describe('location on sales', () => {
+  it('returns the location the sale was made at', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 5, quantity: 10 });
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+
+    const res = await http.get('/sales', owner.token);
+    const sale = res.body.items[0];
+    expect(typeof sale.location_id).toBe('number');
+    expect(sale.location_name.length).toBeGreaterThan(0);
+  });
+});
