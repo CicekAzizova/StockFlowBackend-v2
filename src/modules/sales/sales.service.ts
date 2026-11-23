@@ -56,6 +56,9 @@ export function toSaleDto(row: SaleRow, storage: Storage): SaleDto {
     total_price: row.total_price,
     sold_by: row.sold_by,
     seller_name: row.seller_name,
+    seller_avatar_url: row.seller_avatar_url
+      ? thumbnailUrlFor(storage, row.seller_avatar_url)
+      : null,
     payment_method: row.payment_method,
     created_at: formatTimestamp(row.created_at),
     items,

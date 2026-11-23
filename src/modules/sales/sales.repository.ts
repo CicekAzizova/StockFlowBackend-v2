@@ -23,6 +23,7 @@ export interface SaleRow {
   payment_method: PaymentMethod;
   sold_by: number;
   seller_name: string;
+  seller_avatar_url: string | null;
   created_at: Date;
   items: SaleItemRow[];
 }
@@ -37,6 +38,7 @@ export interface SaleListFilters {
 const SELECT = `
   SELECT s.id, s.receipt_no, s.total_price, s.payment_method, s.sold_by, s.created_at,
          trim(u.name || ' ' || u.surname) AS seller_name,
+         u.avatar_url AS seller_avatar_url,
          COALESCE((
            SELECT json_agg(json_build_object(
                     'product_id', i.product_id, 'product_name', i.product_name, 'sku', i.sku,

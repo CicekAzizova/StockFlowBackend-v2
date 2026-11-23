@@ -299,3 +299,21 @@ describe('history and summary', () => {
     expect(got.body).toMatchObject({ product_name: 'Old Name', unit_price: 7, total_price: 7 });
   });
 });
+
+describe('seller avatar on sales', () => {
+  it('returns the seller avatar, or null when the seller has none', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 5, quantity: 10 });
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+
+    const before = await http.get('/sales', owner.token);
+    expect(before.body.items[0].seller_avatar_url).toBeNull();
+
+    await ctx.pool.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [
+      'http://localhost/uploads/avatar.jpg',
+      owner.userId,
+    ]);
+    const after = await http.get('/sales', owner.token);
+    expect(after.body.items[0].seller_avatar_url).toEqual(expect.stringContaining('avatar'));
+  });
+});
