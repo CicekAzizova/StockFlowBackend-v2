@@ -63,6 +63,7 @@ export function toSaleDto(row: SaleRow, storage: Storage): SaleDto {
     location_id: row.location_id,
     location_name: row.location_name,
     payment_method: row.payment_method,
+    payments: row.payments.map((p) => ({ method: p.method, amount: roundMoney(p.amount) })),
     created_at: formatTimestamp(row.created_at),
     items,
   };
@@ -153,17 +154,37 @@ export function createSalesService(deps: AppDeps) {
         // Yekun sətirlərin cəmindən götürülür: yuvarlaqlaşdırma 1 qəpik fərq yaratsa belə tutarlı qalır.
         const total = roundMoney(items.reduce((sum, item) => sum + item.line_total, 0));
         const discount = roundMoney(subtotal - total);
+
+        // Ödəniş bölgüsü: verilməyibsə bütün məbləğ tək üsulladır.
+        const payments: repo.SalePaymentRow[] =
+          input.payments ?? (total > 0 ? [{ method: input.payment_method, amount: total }] : []);
+        const paid = roundMoney(payments.reduce((sum, p) => sum + p.amount, 0));
+        if (paid !== total) {
+          throw badRequest('INVALID_PAYMENTS', 'Payments must add up to the sale total', {
+            total,
+            paid,
+          });
+        }
+        const only = payments.length === 1 ? payments[0] : undefined;
+        const paymentMethod: repo.SalePaymentMethod = only
+          ? only.method
+          : payments.length > 1
+            ? 'mixed'
+            : input.payment_method;
         const receiptNo = await stores.nextReceiptNo(tx, storeId);
         const sale = await repo.insertSale(tx, {
           storeId,
           locationId: location.id,
           receiptNo,
           soldBy: auth.userId,
-          paymentMethod: input.payment_method,
+          paymentMethod,
           totalPrice: total,
           discountAmount: discount,
           note: input.note,
         });
+        for (const payment of payments) {
+          await repo.insertSalePayment(tx, sale.id, payment);
+        }
         for (const item of items) {
           await repo.insertSaleItem(tx, sale.id, item);
           await movements.recordMovement(tx, {
@@ -275,10 +296,11 @@ export function createSalesService(deps: AppDeps) {
       const current = { from: query.from, to: query.to };
       const previous = { from: formatDay(fromMs - days * DAY_MS), to: formatDay(fromMs - DAY_MS) };
 
-      const [now, before, sellers] = await Promise.all([
+      const [now, before, sellers, methods] = await Promise.all([
         repo.salesTotals(pool, storeId, timezone, current, filters),
         repo.salesTotals(pool, storeId, timezone, previous, filters),
         repo.salesBySeller(pool, storeId, timezone, current, filters),
+        repo.paymentsByMethod(pool, storeId, timezone, current, filters),
       ]);
 
       return {
@@ -292,6 +314,7 @@ export function createSalesService(deps: AppDeps) {
           revenue: roundMoney(row.revenue),
           orders: row.orders,
         })),
+        by_payment: methods.map((row) => ({ method: row.method, amount: roundMoney(row.amount) })),
       };
     },
 

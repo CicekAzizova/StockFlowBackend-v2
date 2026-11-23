@@ -10,6 +10,16 @@ const positiveInt = z
   .max(1_000_000, INVALID_SALE);
 
 export const PAYMENT_METHODS = ['cash', 'card', 'transfer', 'other'] as const;
+/** Satışın özündə: bir neçə üsulla ödənibsə 'mixed'. */
+export const SALE_PAYMENT_METHODS = [...PAYMENT_METHODS, 'mixed'] as const;
+
+const paymentInput = z.object({
+  method: z.enum(PAYMENT_METHODS),
+  amount: z
+    .number({ error: 'Payment amount must be a positive number' })
+    .positive('Payment amount must be a positive number')
+    .max(1_000_000_000, 'Payment amount is too large'),
+});
 
 const saleItemInput = z.object({ product_id: positiveInt, quantity: positiveInt });
 
@@ -29,6 +39,15 @@ export const createSaleBody = z
       .max(100, 'At most 100 items per sale')
       .optional(),
     payment_method: z.enum(PAYMENT_METHODS).default('cash'),
+    payments: z
+      .array(paymentInput)
+      .min(1)
+      .max(PAYMENT_METHODS.length)
+      .refine((list) => new Set(list.map((p) => p.method)).size === list.length, {
+        message: 'Each payment method can appear only once',
+      })
+      .optional()
+      .describe('Split payment. The amounts must add up to the final total.'),
     discount: z
       .number({ error: 'Discount must be a non-negative number' })
       .min(0, 'Discount must be a non-negative number')
@@ -50,6 +69,7 @@ export const createSaleBody = z
     return {
       items,
       payment_method: body.payment_method,
+      payments: body.payments,
       discount: body.discount ?? 0,
       note: body.note,
     };
@@ -99,7 +119,8 @@ export const saleDto = z.object({
   seller_avatar_url: z.string().nullable(),
   location_id: z.number().int(),
   location_name: z.string(),
-  payment_method: z.enum(PAYMENT_METHODS),
+  payment_method: z.enum(SALE_PAYMENT_METHODS),
+  payments: z.array(z.object({ method: z.enum(PAYMENT_METHODS), amount: z.number() })),
   created_at: z.string().describe('UTC, format yyyy-MM-dd HH:mm:ss'),
   items: z.array(saleItemDto),
 });
@@ -183,4 +204,7 @@ export const salesTotalsResponse = z.object({
       }),
     )
     .describe('Revenue per seller, biggest first. Associates only see themselves.'),
+  by_payment: z
+    .array(z.object({ method: z.enum(PAYMENT_METHODS), amount: z.number() }))
+    .describe('Money received per payment method, biggest first'),
 });

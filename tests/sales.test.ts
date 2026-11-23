@@ -382,3 +382,85 @@ describe('cashier discount', () => {
     expect(tooBig.body.code).toBe('INVALID_DISCOUNT');
   });
 });
+
+describe('split payments', () => {
+  it('stores each method amount and marks the sale as mixed', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 20 });
+
+    const res = await http.post(
+      '/sales',
+      {
+        items: [{ product_id: p.id, quantity: 5 }],
+        payments: [
+          { method: 'cash', amount: 20 },
+          { method: 'card', amount: 30 },
+        ],
+      },
+      owner.token,
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.sale.payment_method).toBe('mixed');
+    expect(res.body.sale.payments).toEqual([
+      { method: 'card', amount: 30 },
+      { method: 'cash', amount: 20 },
+    ]);
+  });
+
+  it('records the whole total under one method when no split is given', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 20 });
+
+    const res = await http.post(
+      '/sales',
+      { product_id: p.id, quantity: 2, payment_method: 'card' },
+      owner.token,
+    );
+    expect(res.body.sale.payment_method).toBe('card');
+    expect(res.body.sale.payments).toEqual([{ method: 'card', amount: 20 }]);
+  });
+
+  it('rejects payments that do not add up to the total', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 20 });
+
+    const res = await http.post(
+      '/sales',
+      {
+        items: [{ product_id: p.id, quantity: 5 }],
+        payments: [
+          { method: 'cash', amount: 20 },
+          { method: 'card', amount: 20 },
+        ],
+      },
+      owner.token,
+    );
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_PAYMENTS');
+  });
+
+  it('adds up the money received per method in the totals', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50 });
+
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token); // cash 10
+    await http.post(
+      '/sales',
+      {
+        items: [{ product_id: p.id, quantity: 5 }],
+        payments: [
+          { method: 'cash', amount: 20 },
+          { method: 'card', amount: 30 },
+        ],
+      },
+      owner.token,
+    );
+
+    const res = await http.get(`/sales/totals?from=${day(0)}&to=${day(0)}`, owner.token);
+    // Məbləğlər bərabərdir, ona görə ad üzrə əlifba sırası.
+    expect(res.body.by_payment).toEqual([
+      { method: 'card', amount: 30 },
+      { method: 'cash', amount: 30 },
+    ]);
+  });
+});

@@ -1,7 +1,13 @@
 import { queryMany, queryOne, type Queryable } from '../../db/pool.js';
-import type { PAYMENT_METHODS } from './sales.schemas.js';
+import type { PAYMENT_METHODS, SALE_PAYMENT_METHODS } from './sales.schemas.js';
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+export type SalePaymentMethod = (typeof SALE_PAYMENT_METHODS)[number];
+
+export interface SalePaymentRow {
+  method: PaymentMethod;
+  amount: number;
+}
 
 export interface SaleItemRow {
   product_id: number;
@@ -21,7 +27,8 @@ export interface SaleRow {
   receipt_no: number;
   total_price: number;
   discount_amount: number;
-  payment_method: PaymentMethod;
+  payment_method: SalePaymentMethod;
+  payments: SalePaymentRow[];
   sold_by: number;
   seller_name: string;
   seller_avatar_url: string | null;
@@ -43,6 +50,10 @@ const SELECT = `
          trim(u.name || ' ' || u.surname) AS seller_name,
          u.avatar_url AS seller_avatar_url,
          s.location_id, l.name AS location_name,
+         COALESCE((
+           SELECT json_agg(json_build_object('method', p.method, 'amount', p.amount) ORDER BY p.amount DESC, p.method)
+           FROM sale_payments p WHERE p.sale_id = s.id
+         ), '[]'::json) AS payments,
          COALESCE((
            SELECT json_agg(json_build_object(
                     'product_id', i.product_id, 'product_name', i.product_name, 'sku', i.sku,
@@ -173,7 +184,7 @@ export async function insertSale(
     locationId: number;
     receiptNo: number;
     soldBy: number;
-    paymentMethod: PaymentMethod;
+    paymentMethod: SalePaymentMethod;
     totalPrice: number;
     discountAmount: number;
     note: string | undefined;
@@ -196,6 +207,18 @@ export async function insertSale(
   );
   if (!row) throw new Error('Failed to insert sale');
   return row;
+}
+
+export async function insertSalePayment(
+  tx: Queryable,
+  saleId: number,
+  payment: SalePaymentRow,
+): Promise<void> {
+  await tx.query('INSERT INTO sale_payments (sale_id, method, amount) VALUES ($1, $2, $3)', [
+    saleId,
+    payment.method,
+    payment.amount,
+  ]);
 }
 
 export async function insertSaleItem(
@@ -367,6 +390,26 @@ export function salesBySeller(
      WHERE ${RANGE}
      GROUP BY s.sold_by, u.name, u.surname
      ORDER BY revenue DESC, s.sold_by`,
+    [storeId, timezone, range.from, range.to, filters.soldBy ?? null, filters.locationId ?? null],
+  );
+}
+
+/** Verilmiş tarix aralığında ödəniş üsulları üzrə daxil olan pul, ən çoxu birinci. */
+export function paymentsByMethod(
+  db: Queryable,
+  storeId: number,
+  timezone: string,
+  range: { from: string; to: string },
+  filters: TotalsFilters,
+): Promise<SalePaymentRow[]> {
+  return queryMany<SalePaymentRow>(
+    db,
+    `SELECT p.method, SUM(p.amount) AS amount
+     FROM sale_payments p
+     JOIN sales s ON s.id = p.sale_id
+     WHERE ${RANGE}
+     GROUP BY p.method
+     ORDER BY amount DESC, p.method`,
     [storeId, timezone, range.from, range.to, filters.soldBy ?? null, filters.locationId ?? null],
   );
 }
