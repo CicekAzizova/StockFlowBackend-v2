@@ -24,6 +24,8 @@ export interface SaleRow {
   sold_by: number;
   seller_name: string;
   seller_avatar_url: string | null;
+  location_id: number;
+  location_name: string;
   created_at: Date;
   items: SaleItemRow[];
 }
@@ -39,6 +41,7 @@ const SELECT = `
   SELECT s.id, s.receipt_no, s.total_price, s.payment_method, s.sold_by, s.created_at,
          trim(u.name || ' ' || u.surname) AS seller_name,
          u.avatar_url AS seller_avatar_url,
+         s.location_id, l.name AS location_name,
          COALESCE((
            SELECT json_agg(json_build_object(
                     'product_id', i.product_id, 'product_name', i.product_name, 'sku', i.sku,
@@ -48,7 +51,8 @@ const SELECT = `
            FROM sale_items i WHERE i.sale_id = s.id
          ), '[]'::json) AS items
   FROM sales s
-  JOIN users u ON u.id = s.sold_by`;
+  JOIN users u ON u.id = s.sold_by
+  JOIN locations l ON l.id = s.location_id`;
 
 function buildWhere(storeId: number, timezone: string, filters: SaleListFilters) {
   const conditions = ['s.store_id = $1'];
