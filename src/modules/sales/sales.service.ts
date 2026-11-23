@@ -54,6 +54,7 @@ export function toSaleDto(row: SaleRow, storage: Storage): SaleDto {
     quantity: first?.quantity ?? 0,
     unit_price: first?.unit_price ?? 0,
     total_price: row.total_price,
+    discount: row.discount_amount,
     sold_by: row.sold_by,
     seller_name: row.seller_name,
     seller_avatar_url: row.seller_avatar_url
@@ -65,6 +66,25 @@ export function toSaleDto(row: SaleRow, storage: Storage): SaleDto {
     created_at: formatTimestamp(row.created_at),
     items,
   };
+}
+
+/**
+ * Kassirin endirimini sətirlərə mütənasib paylayır (line_total azalır, unit_price qalır).
+ * Beləliklə sətirlərin cəmi həmişə yekun məbləğə bərabərdir və hesabatlar düz çıxır.
+ * Son sətir yuvarlaqlaşdırma qalığını götürür.
+ */
+function applyDiscount(items: repo.SaleItemRow[], subtotal: number, discount: number): void {
+  if (discount <= 0 || subtotal <= 0) return;
+  let remaining = discount;
+  items.forEach((item, index) => {
+    const isLast = index === items.length - 1;
+    const share = isLast
+      ? remaining
+      : Math.min(item.line_total, roundMoney((discount * item.line_total) / subtotal));
+    const applied = Math.min(item.line_total, roundMoney(share));
+    item.line_total = roundMoney(item.line_total - applied);
+    remaining = roundMoney(remaining - applied);
+  });
 }
 
 export function createSalesService(deps: AppDeps) {
@@ -123,7 +143,16 @@ export function createSalesService(deps: AppDeps) {
           });
         }
 
+        const subtotal = roundMoney(items.reduce((sum, item) => sum + item.line_total, 0));
+        if (roundMoney(input.discount) > subtotal) {
+          throw badRequest('INVALID_DISCOUNT', 'Discount cannot exceed the sale total', {
+            subtotal,
+          });
+        }
+        applyDiscount(items, subtotal, roundMoney(input.discount));
+        // Yekun sətirlərin cəmindən götürülür: yuvarlaqlaşdırma 1 qəpik fərq yaratsa belə tutarlı qalır.
         const total = roundMoney(items.reduce((sum, item) => sum + item.line_total, 0));
+        const discount = roundMoney(subtotal - total);
         const receiptNo = await stores.nextReceiptNo(tx, storeId);
         const sale = await repo.insertSale(tx, {
           storeId,
@@ -132,6 +161,7 @@ export function createSalesService(deps: AppDeps) {
           soldBy: auth.userId,
           paymentMethod: input.payment_method,
           totalPrice: total,
+          discountAmount: discount,
           note: input.note,
         });
         for (const item of items) {

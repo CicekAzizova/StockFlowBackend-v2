@@ -29,6 +29,12 @@ export const createSaleBody = z
       .max(100, 'At most 100 items per sale')
       .optional(),
     payment_method: z.enum(PAYMENT_METHODS).default('cash'),
+    discount: z
+      .number({ error: 'Discount must be a non-negative number' })
+      .min(0, 'Discount must be a non-negative number')
+      .max(1_000_000_000, 'Discount is too large')
+      .optional()
+      .describe('Cashier discount for the whole sale, as an amount (not a percentage)'),
     note: z.string().trim().max(500).optional(),
   })
   .transform((body, ctx) => {
@@ -41,7 +47,12 @@ export const createSaleBody = z
       ctx.addIssue({ code: 'custom', message: INVALID_SALE });
       return z.NEVER;
     }
-    return { items, payment_method: body.payment_method, note: body.note };
+    return {
+      items,
+      payment_method: body.payment_method,
+      discount: body.discount ?? 0,
+      note: body.note,
+    };
   });
 
 export type CreateSaleInput = z.output<typeof createSaleBody>;
@@ -81,7 +92,8 @@ export const saleDto = z.object({
   product_image_url: z.string().nullable(),
   quantity: z.number().int(),
   unit_price: z.number(),
-  total_price: z.number(),
+  total_price: z.number().describe('Final amount after the cashier discount'),
+  discount: z.number().describe('Cashier discount amount (0 when none)'),
   sold_by: z.number().int(),
   seller_name: z.string(),
   seller_avatar_url: z.string().nullable(),

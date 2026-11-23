@@ -22,6 +22,13 @@ beforeEach(async () => {
   );
 });
 
+/** Mağaza vaxtı ilə (Asia/Baku) bu günün tarixi, YYYY-MM-DD. */
+function day(offset = 0): string {
+  return new Date(Date.now() - offset * 86_400_000).toLocaleDateString('en-CA', {
+    timeZone: 'Asia/Baku',
+  });
+}
+
 const stockOf = async (id: number, token: string) =>
   (await http.get(`/products/${id}`, token)).body.quantity as number;
 
@@ -328,5 +335,50 @@ describe('location on sales', () => {
     const sale = res.body.items[0];
     expect(typeof sale.location_id).toBe('number');
     expect(sale.location_name.length).toBeGreaterThan(0);
+  });
+});
+
+describe('cashier discount', () => {
+  it('lowers the total, spreads over the lines and keeps reports consistent', async () => {
+    const owner = await registerOwner(ctx);
+    const a = await createProduct(ctx, owner, { price: 10, quantity: 20, cost_price: 4 });
+    const b = await createProduct(ctx, owner, { price: 5, quantity: 20, cost_price: 2 });
+
+    const res = await http.post(
+      '/sales',
+      {
+        items: [
+          { product_id: a.id, quantity: 2 }, // 20
+          { product_id: b.id, quantity: 2 }, // 10
+        ],
+        discount: 3,
+      },
+      owner.token,
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.sale.total_price).toBe(27);
+    expect(res.body.sale.discount).toBe(3);
+    const lines = res.body.sale.items.map((i: { line_total: number }) => i.line_total);
+    expect(lines.reduce((x: number, y: number) => x + y, 0)).toBeCloseTo(27, 2);
+
+    const totals = await http.get(`/sales/totals?from=${day(0)}&to=${day(0)}`, owner.token);
+    expect(totals.body.revenue).toBe(27);
+  });
+
+  it('defaults to no discount and rejects a discount above the total', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 5 });
+
+    const plain = await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+    expect(plain.body.sale.discount).toBe(0);
+    expect(plain.body.sale.total_price).toBe(10);
+
+    const tooBig = await http.post(
+      '/sales',
+      { items: [{ product_id: p.id, quantity: 1 }], discount: 11 },
+      owner.token,
+    );
+    expect(tooBig.status).toBe(400);
+    expect(tooBig.body.code).toBe('INVALID_DISCOUNT');
   });
 });
