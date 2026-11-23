@@ -129,3 +129,43 @@ export const dailySalesResponse = z.object({
   total: z.number().describe('Sum of all returned days'),
   orders: z.number().int().describe('Number of sales in all returned days'),
 });
+
+export const salesTotalsQuery = z.object({
+  from: isoDate.describe('First day (inclusive), in the store time zone'),
+  to: isoDate.describe('Last day (inclusive), in the store time zone'),
+  seller_id: z.coerce
+    .number({ error: 'seller_id must be a positive integer' })
+    .int({ error: 'seller_id must be a positive integer' })
+    .positive({ error: 'seller_id must be a positive integer' })
+    .optional(),
+  location_id: z.coerce
+    .number({ error: 'location_id must be a positive integer' })
+    .int({ error: 'location_id must be a positive integer' })
+    .positive({ error: 'location_id must be a positive integer' })
+    .optional(),
+});
+
+const salesTotals = {
+  revenue: z.number().describe('Sum of sale totals'),
+  orders: z.number().int().describe('Number of sales'),
+  average_check: z.number().describe('Revenue divided by orders, 0 when there are no sales'),
+};
+
+export const salesTotalsResponse = z.object({
+  from: z.string(),
+  to: z.string(),
+  ...salesTotals,
+  previous: z
+    .object(salesTotals)
+    .describe('The same totals for the period of equal length right before `from`'),
+  by_seller: z
+    .array(
+      z.object({
+        seller_id: z.number().int(),
+        seller_name: z.string(),
+        revenue: z.number(),
+        orders: z.number().int(),
+      }),
+    )
+    .describe('Revenue per seller, biggest first. Associates only see themselves.'),
+});

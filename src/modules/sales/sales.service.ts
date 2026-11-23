@@ -7,11 +7,32 @@ import { resolveLocation } from '../../shared/location-context.js';
 import { discountedPrice, formatTimestamp, roundMoney } from '../../shared/formatting.js';
 import { offsetOf, toPage, type PaginationQuery } from '../../shared/schemas.js';
 import * as movements from '../products/stock-movements.repository.js';
+import * as locations from '../locations/locations.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as repo from './sales.repository.js';
 import type { SaleRow } from './sales.repository.js';
 import type { CreateSaleInput, SaleDto } from './sales.schemas.js';
 import type { Storage } from '../../infra/storage/storage.js';
+
+const DAY_MS = 86_400_000;
+/** Bir sorğuda ən çox gün (təxminən 13 ay). */
+const MAX_RANGE_DAYS = 400;
+
+function parseDay(day: string): number {
+  return Date.parse(`${day}T00:00:00Z`);
+}
+
+function formatDay(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+function withAverage(row: { revenue: number; orders: number }) {
+  return {
+    revenue: roundMoney(row.revenue),
+    orders: row.orders,
+    average_check: row.orders > 0 ? roundMoney(row.revenue / row.orders) : 0,
+  };
+}
 
 export type SalesService = ReturnType<typeof createSalesService>;
 
@@ -181,6 +202,61 @@ export function createSalesService(deps: AppDeps) {
         days: rows,
         total: roundMoney(rows.reduce((sum, row) => sum + row.total, 0)),
         orders: rows.reduce((sum, row) => sum + row.orders, 0),
+      };
+    },
+
+    /**
+     * Seçilmiş tarix aralığının cəmi və ondan dərhal əvvəlki eyni uzunluqlu dövrlə müqayisə.
+     * Sahib bütün mağazanı (və ya seller_id / location_id ilə süzülmüş) görür, satıcı yalnız özünü.
+     */
+    async totals(
+      auth: AuthContext,
+      query: {
+        from: string;
+        to: string;
+        seller_id?: number | undefined;
+        location_id?: number | undefined;
+      },
+    ) {
+      const storeId = requireStoreId(auth);
+      const timezone = await storeTimezone(storeId);
+
+      const fromMs = parseDay(query.from);
+      const days = Math.round((parseDay(query.to) - fromMs) / DAY_MS) + 1;
+      if (days < 1) throw badRequest('INVALID_RANGE', 'to must not be before from');
+      if (days > MAX_RANGE_DAYS) {
+        throw badRequest('RANGE_TOO_LONG', `The range can be at most ${MAX_RANGE_DAYS} days`);
+      }
+
+      if (query.location_id !== undefined) {
+        const found = await locations.findLocation(pool, storeId, query.location_id);
+        if (!found) throw notFound('LOCATION_NOT_FOUND', 'Location not found');
+      }
+
+      const filters = {
+        soldBy: auth.role === 'OWNER' ? query.seller_id : auth.userId,
+        locationId: query.location_id,
+      };
+      const current = { from: query.from, to: query.to };
+      const previous = { from: formatDay(fromMs - days * DAY_MS), to: formatDay(fromMs - DAY_MS) };
+
+      const [now, before, sellers] = await Promise.all([
+        repo.salesTotals(pool, storeId, timezone, current, filters),
+        repo.salesTotals(pool, storeId, timezone, previous, filters),
+        repo.salesBySeller(pool, storeId, timezone, current, filters),
+      ]);
+
+      return {
+        from: query.from,
+        to: query.to,
+        ...withAverage(now),
+        previous: withAverage(before),
+        by_seller: sellers.map((row) => ({
+          seller_id: Number(row.seller_id),
+          seller_name: row.seller_name,
+          revenue: roundMoney(row.revenue),
+          orders: row.orders,
+        })),
       };
     },
 
