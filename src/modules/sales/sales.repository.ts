@@ -20,6 +20,7 @@ export interface SaleRow {
   id: number;
   receipt_no: number;
   total_price: number;
+  discount_amount: number;
   payment_method: PaymentMethod;
   sold_by: number;
   seller_name: string;
@@ -38,7 +39,7 @@ export interface SaleListFilters {
 }
 
 const SELECT = `
-  SELECT s.id, s.receipt_no, s.total_price, s.payment_method, s.sold_by, s.created_at,
+  SELECT s.id, s.receipt_no, s.total_price, s.discount_amount, s.payment_method, s.sold_by, s.created_at,
          trim(u.name || ' ' || u.surname) AS seller_name,
          u.avatar_url AS seller_avatar_url,
          s.location_id, l.name AS location_name,
@@ -174,13 +175,14 @@ export async function insertSale(
     soldBy: number;
     paymentMethod: PaymentMethod;
     totalPrice: number;
+    discountAmount: number;
     note: string | undefined;
   },
 ): Promise<{ id: number; created_at: Date }> {
   const row = await queryOne<{ id: number; created_at: Date }>(
     tx,
-    `INSERT INTO sales (store_id, location_id, receipt_no, sold_by, payment_method, total_price, note)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, created_at`,
+    `INSERT INTO sales (store_id, location_id, receipt_no, sold_by, payment_method, total_price, discount_amount, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`,
     [
       input.storeId,
       input.locationId,
@@ -188,6 +190,7 @@ export async function insertSale(
       input.soldBy,
       input.paymentMethod,
       input.totalPrice,
+      input.discountAmount,
       input.note ?? null,
     ],
   );
