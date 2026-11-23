@@ -9,6 +9,8 @@ import {
   saleDto,
   salesListQuery,
   salesSummaryResponse,
+  salesTotalsQuery,
+  salesTotalsResponse,
 } from './sales.schemas.js';
 import { createSalesService } from './sales.service.js';
 
@@ -70,6 +72,26 @@ export const salesRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => service.daily(request.auth, request.query.days),
+  );
+
+  app.get(
+    '/totals',
+    {
+      schema: {
+        tags: ['Sales'],
+        summary:
+          'Totals for a date range, compared with the period of equal length right before it',
+        description:
+          'Revenue, number of sales and average check between `from` and `to` (both included, ' +
+          'store time zone, at most 400 days), plus the same for the period right before `from` ' +
+          'and a per-seller breakdown. Owners can filter by `seller_id` and `location_id`; ' +
+          'associates only see their own sales.',
+        security: secured,
+        querystring: salesTotalsQuery,
+        response: { 200: salesTotalsResponse },
+      },
+    },
+    async (request) => service.totals(request.auth, request.query),
   );
 
   app.get(

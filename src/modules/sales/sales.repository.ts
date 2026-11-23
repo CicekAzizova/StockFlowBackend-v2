@@ -296,3 +296,68 @@ export function dailySales(
     [storeId, timezone, days, soldBy ?? null],
   );
 }
+
+export interface TotalsFilters {
+  /** Satıcı yalnız öz satışlarını görür */
+  soldBy?: number | undefined;
+  locationId?: number | undefined;
+}
+
+export interface TotalsRow {
+  revenue: number;
+  orders: number;
+}
+
+export interface SellerTotalsRow {
+  seller_id: number;
+  seller_name: string;
+  revenue: number;
+  orders: number;
+}
+
+/** Tarixlər mağazanın saat qurşağında gün sərhədləridir, hər iki gün daxildir. */
+const RANGE = `s.store_id = $1
+  AND s.created_at >= ($3::date::timestamp AT TIME ZONE $2)
+  AND s.created_at < (($4::date + 1)::timestamp AT TIME ZONE $2)
+  AND ($5::bigint IS NULL OR s.sold_by = $5)
+  AND ($6::bigint IS NULL OR s.location_id = $6)`;
+
+/** Verilmiş tarix aralığı üçün satış cəmi. */
+export async function salesTotals(
+  db: Queryable,
+  storeId: number,
+  timezone: string,
+  range: { from: string; to: string },
+  filters: TotalsFilters,
+): Promise<TotalsRow> {
+  const row = await queryOne<TotalsRow>(
+    db,
+    `SELECT COALESCE(SUM(s.total_price), 0) AS revenue, COUNT(s.id) AS orders
+     FROM sales s WHERE ${RANGE}`,
+    [storeId, timezone, range.from, range.to, filters.soldBy ?? null, filters.locationId ?? null],
+  );
+  return row ?? { revenue: 0, orders: 0 };
+}
+
+/** Verilmiş tarix aralığı üçün satıcılar üzrə cəm, ən çox gəlirli birinci. */
+export function salesBySeller(
+  db: Queryable,
+  storeId: number,
+  timezone: string,
+  range: { from: string; to: string },
+  filters: TotalsFilters,
+): Promise<SellerTotalsRow[]> {
+  return queryMany<SellerTotalsRow>(
+    db,
+    `SELECT s.sold_by AS seller_id,
+            trim(u.name || ' ' || u.surname) AS seller_name,
+            SUM(s.total_price) AS revenue,
+            COUNT(s.id) AS orders
+     FROM sales s
+     JOIN users u ON u.id = s.sold_by
+     WHERE ${RANGE}
+     GROUP BY s.sold_by, u.name, u.surname
+     ORDER BY revenue DESC, s.sold_by`,
+    [storeId, timezone, range.from, range.to, filters.soldBy ?? null, filters.locationId ?? null],
+  );
+}
