@@ -87,6 +87,15 @@ export const salesListQuery = paginationQuery.extend({
     .optional(),
   from: isoDate.optional().describe('First day (inclusive), in the store time zone'),
   to: isoDate.optional().describe('Last day (inclusive), in the store time zone'),
+  location_id: z.coerce
+    .number({ error: 'location_id must be a positive integer' })
+    .int({ error: 'location_id must be a positive integer' })
+    .positive({ error: 'location_id must be a positive integer' })
+    .optional(),
+  payment_method: z
+    .enum(PAYMENT_METHODS)
+    .optional()
+    .describe('Keeps sales paid with this method, split payments included'),
 });
 
 export const saleItemDto = z.object({
@@ -179,6 +188,10 @@ export const salesTotalsQuery = z.object({
     .int({ error: 'location_id must be a positive integer' })
     .positive({ error: 'location_id must be a positive integer' })
     .optional(),
+  payment_method: z
+    .enum(PAYMENT_METHODS)
+    .optional()
+    .describe('Keeps sales paid with this method, split payments included'),
 });
 
 const salesTotals = {

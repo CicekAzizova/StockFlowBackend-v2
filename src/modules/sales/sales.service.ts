@@ -10,7 +10,7 @@ import * as movements from '../products/stock-movements.repository.js';
 import * as locations from '../locations/locations.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as repo from './sales.repository.js';
-import type { SaleRow } from './sales.repository.js';
+import type { PaymentMethod, SaleRow } from './sales.repository.js';
 import type { CreateSaleInput, SaleDto } from './sales.schemas.js';
 import type { Storage } from '../../infra/storage/storage.js';
 
@@ -94,6 +94,13 @@ export function createSalesService(deps: AppDeps) {
   async function storeTimezone(storeId: number): Promise<string> {
     const store = await stores.findStoreById(pool, storeId);
     return store?.timezone ?? config.defaultTimezone;
+  }
+
+  /** Məkan süzgəci veriləndə onun bu mağazaya aid olduğunu yoxlayır. */
+  async function requireLocation(storeId: number, locationId: number | undefined): Promise<void> {
+    if (locationId === undefined) return;
+    const found = await locations.findLocation(pool, storeId, locationId);
+    if (!found) throw notFound('LOCATION_NOT_FOUND', 'Location not found');
   }
 
   return {
@@ -212,17 +219,26 @@ export function createSalesService(deps: AppDeps) {
         seller_id?: number | undefined;
         from?: string | undefined;
         to?: string | undefined;
+        location_id?: number | undefined;
+        payment_method?: PaymentMethod | undefined;
       },
     ) {
       const storeId = requireStoreId(auth);
       const timezone = await storeTimezone(storeId);
+      await requireLocation(storeId, query.location_id);
       // Satıcı yalnız öz satışlarını görür. Sahib isə seller_id ilə süzə bilər.
       const soldBy = auth.role === 'OWNER' ? query.seller_id : auth.userId;
       const { rows, total } = await repo.listSales(
         pool,
         storeId,
         timezone,
-        { soldBy, from: query.from, to: query.to },
+        {
+          soldBy,
+          from: query.from,
+          to: query.to,
+          locationId: query.location_id,
+          paymentMethod: query.payment_method,
+        },
         { limit: query.limit, offset: offsetOf(query) },
       );
       return toPage(
@@ -272,6 +288,7 @@ export function createSalesService(deps: AppDeps) {
         to: string;
         seller_id?: number | undefined;
         location_id?: number | undefined;
+        payment_method?: PaymentMethod | undefined;
       },
     ) {
       const storeId = requireStoreId(auth);
@@ -284,14 +301,12 @@ export function createSalesService(deps: AppDeps) {
         throw badRequest('RANGE_TOO_LONG', `The range can be at most ${MAX_RANGE_DAYS} days`);
       }
 
-      if (query.location_id !== undefined) {
-        const found = await locations.findLocation(pool, storeId, query.location_id);
-        if (!found) throw notFound('LOCATION_NOT_FOUND', 'Location not found');
-      }
+      await requireLocation(storeId, query.location_id);
 
       const filters = {
         soldBy: auth.role === 'OWNER' ? query.seller_id : auth.userId,
         locationId: query.location_id,
+        paymentMethod: query.payment_method,
       };
       const current = { from: query.from, to: query.to };
       const previous = { from: formatDay(fromMs - days * DAY_MS), to: formatDay(fromMs - DAY_MS) };

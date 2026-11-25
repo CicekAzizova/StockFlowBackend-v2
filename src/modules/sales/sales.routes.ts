@@ -84,7 +84,8 @@ export const salesRoutes: FastifyPluginAsyncZod = async (app) => {
         description:
           'Revenue, number of sales and average check between `from` and `to` (both included, ' +
           'store time zone, at most 400 days), plus the same for the period right before `from` ' +
-          'and a per-seller breakdown. Owners can filter by `seller_id` and `location_id`; ' +
+          'and a per-seller breakdown. Owners can filter by `seller_id`, `location_id` and ' +
+          '`payment_method`; ' +
           'associates only see their own sales.',
         security: secured,
         querystring: salesTotalsQuery,
@@ -100,6 +101,9 @@ export const salesRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: {
         tags: ['Sales'],
         summary: 'List sales (newest first). Owners see the store, associates only their own.',
+        description:
+          'Filters: `from`, `to`, `seller_id` (owners), `location_id`, `payment_method`. ' +
+          'A split payment matches every method it was paid with.',
         security: secured,
         querystring: salesListQuery,
         response: { 200: paginatedResponse(saleDto) },
