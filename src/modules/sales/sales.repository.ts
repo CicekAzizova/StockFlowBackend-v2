@@ -43,6 +43,14 @@ export interface SaleListFilters {
   soldBy?: number | undefined;
   from?: string | undefined;
   to?: string | undefined;
+  locationId?: number | undefined;
+  /** Bu üsulla ödənilmiş satışlar (qarışıq ödənişin bir hissəsi olsa da sayılır). */
+  paymentMethod?: PaymentMethod | undefined;
+}
+
+/** Satışın ödənişlərindən birinin bu üsulla olduğunu yoxlayır. */
+function paidWith(bind: (value: unknown) => string, method: PaymentMethod): string {
+  return `EXISTS (SELECT 1 FROM sale_payments sp WHERE sp.sale_id = s.id AND sp.method = ${bind(method)})`;
 }
 
 const SELECT = `
@@ -82,6 +90,12 @@ function buildWhere(storeId: number, timezone: string, filters: SaleListFilters)
     conditions.push(
       `s.created_at < ((${bind(filters.to)}::date + 1)::timestamp AT TIME ZONE ${bind(timezone)})`,
     );
+  }
+  if (filters.locationId !== undefined) {
+    conditions.push(`s.location_id = ${bind(filters.locationId)}`);
+  }
+  if (filters.paymentMethod !== undefined) {
+    conditions.push(paidWith(bind, filters.paymentMethod));
   }
   return { where: conditions.join(' AND '), params };
 }
@@ -333,6 +347,26 @@ export interface TotalsFilters {
   /** Satıcı yalnız öz satışlarını görür */
   soldBy?: number | undefined;
   locationId?: number | undefined;
+  /** Bu üsulla ödənilmiş satışlar (qarışıq ödənişin bir hissəsi olsa da sayılır). */
+  paymentMethod?: PaymentMethod | undefined;
+}
+
+/** salesTotals, salesBySeller və paymentsByMethod eyni sıra ilə parametr göndərir. */
+function rangeParams(
+  storeId: number,
+  timezone: string,
+  range: { from: string; to: string },
+  filters: TotalsFilters,
+): unknown[] {
+  return [
+    storeId,
+    timezone,
+    range.from,
+    range.to,
+    filters.soldBy ?? null,
+    filters.locationId ?? null,
+    filters.paymentMethod ?? null,
+  ];
 }
 
 export interface TotalsRow {
@@ -352,7 +386,11 @@ const RANGE = `s.store_id = $1
   AND s.created_at >= ($3::date::timestamp AT TIME ZONE $2)
   AND s.created_at < (($4::date + 1)::timestamp AT TIME ZONE $2)
   AND ($5::bigint IS NULL OR s.sold_by = $5)
-  AND ($6::bigint IS NULL OR s.location_id = $6)`;
+  AND ($6::bigint IS NULL OR s.location_id = $6)
+  AND (
+    $7::text IS NULL
+    OR EXISTS (SELECT 1 FROM sale_payments sp WHERE sp.sale_id = s.id AND sp.method = $7)
+  )`;
 
 /** Verilmiş tarix aralığı üçün satış cəmi. */
 export async function salesTotals(
@@ -366,7 +404,7 @@ export async function salesTotals(
     db,
     `SELECT COALESCE(SUM(s.total_price), 0) AS revenue, COUNT(s.id) AS orders
      FROM sales s WHERE ${RANGE}`,
-    [storeId, timezone, range.from, range.to, filters.soldBy ?? null, filters.locationId ?? null],
+    rangeParams(storeId, timezone, range, filters),
   );
   return row ?? { revenue: 0, orders: 0 };
 }
@@ -390,7 +428,7 @@ export function salesBySeller(
      WHERE ${RANGE}
      GROUP BY s.sold_by, u.name, u.surname
      ORDER BY revenue DESC, s.sold_by`,
-    [storeId, timezone, range.from, range.to, filters.soldBy ?? null, filters.locationId ?? null],
+    rangeParams(storeId, timezone, range, filters),
   );
 }
 
@@ -410,6 +448,6 @@ export function paymentsByMethod(
      WHERE ${RANGE}
      GROUP BY p.method
      ORDER BY amount DESC, p.method`,
-    [storeId, timezone, range.from, range.to, filters.soldBy ?? null, filters.locationId ?? null],
+    rangeParams(storeId, timezone, range, filters),
   );
 }

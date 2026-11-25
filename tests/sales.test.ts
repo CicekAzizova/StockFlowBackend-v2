@@ -464,3 +464,64 @@ describe('split payments', () => {
     ]);
   });
 });
+
+describe('sales list filters', () => {
+  it('filters by location and by payment method, split payments included', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50 });
+    const main = (await http.get('/locations', owner.token)).body[0];
+    const second = (
+      await http.post('/locations', { name: 'Second shop', kind: 'store' }, owner.token)
+    ).body;
+    await ctx.pool.query(
+      'INSERT INTO product_stock (product_id, location_id, quantity) VALUES ($1, $2, 20)',
+      [p.id, second.id],
+    );
+
+    const atSecondShop = {
+      token: owner.token,
+      headers: { 'X-Location-Id': String(second.id) },
+    };
+
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token); // main, cash
+    await http.request('POST', '/sales', {
+      ...atSecondShop,
+      payload: { items: [{ product_id: p.id, quantity: 1 }], payment_method: 'card' },
+    });
+    await http.request('POST', '/sales', {
+      ...atSecondShop,
+      payload: {
+        items: [{ product_id: p.id, quantity: 2 }],
+        payments: [
+          { method: 'cash', amount: 5 },
+          { method: 'card', amount: 15 },
+        ],
+      },
+    });
+
+    const atSecond = await http.get(`/sales?location_id=${second.id}`, owner.token);
+    expect(atSecond.body.items).toHaveLength(2);
+
+    const byCard = await http.get('/sales?payment_method=card', owner.token);
+    expect(byCard.body.items).toHaveLength(2); // kart + qarışıq
+
+    const cashAtMain = await http.get(
+      `/sales?payment_method=cash&location_id=${main.id}`,
+      owner.token,
+    );
+    expect(cashAtMain.body.items).toHaveLength(1);
+
+    const totals = await http.get(
+      `/sales/totals?from=${day(0)}&to=${day(0)}&payment_method=card`,
+      owner.token,
+    );
+    expect(totals.body.orders).toBe(2);
+  });
+
+  it('rejects an unknown location', async () => {
+    const owner = await registerOwner(ctx);
+    const res = await http.get('/sales?location_id=9999', owner.token);
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('LOCATION_NOT_FOUND');
+  });
+});
