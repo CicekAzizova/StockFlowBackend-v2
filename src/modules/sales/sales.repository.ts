@@ -68,6 +68,8 @@ export interface SaleListFilters {
   locationId?: number | undefined;
   /** Bu üsulla ödənilmiş satışlar (qarışıq ödənişin bir hissəsi olsa da sayılır). */
   paymentMethod?: PaymentMethod | undefined;
+  /** true: yalnız qaytarması olanlar, false: yalnız toxunulmamış satışlar. */
+  returned?: boolean | undefined;
 }
 
 /** Satışın ödənişlərindən birinin bu üsulla olduğunu yoxlayır. */
@@ -119,6 +121,9 @@ function buildWhere(storeId: number, timezone: string, filters: SaleListFilters)
   }
   if (filters.paymentMethod !== undefined) {
     conditions.push(paidWith(bind, filters.paymentMethod));
+  }
+  if (filters.returned !== undefined) {
+    conditions.push(filters.returned ? 's.returned_amount > 0' : 's.returned_amount = 0');
   }
   return { where: conditions.join(' AND '), params };
 }

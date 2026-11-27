@@ -225,6 +225,7 @@ export function createSalesService(deps: AppDeps) {
         to?: string | undefined;
         location_id?: number | undefined;
         payment_method?: PaymentMethod | undefined;
+        returned?: boolean | undefined;
       },
     ) {
       const storeId = requireStoreId(auth);
@@ -242,6 +243,7 @@ export function createSalesService(deps: AppDeps) {
           to: query.to,
           locationId: query.location_id,
           paymentMethod: query.payment_method,
+          returned: query.returned,
         },
         { limit: query.limit, offset: offsetOf(query) },
       );

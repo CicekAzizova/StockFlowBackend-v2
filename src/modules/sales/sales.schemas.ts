@@ -96,6 +96,7 @@ export const salesListQuery = paginationQuery.extend({
     .enum(PAYMENT_METHODS)
     .optional()
     .describe('Keeps sales paid with this method, split payments included'),
+  returned: z.stringbool().optional().describe('Only sales that were (not) refunded'),
 });
 
 export const RETURN_REASONS = ['damaged', 'customer_declined', 'wrong_item', 'other'] as const;

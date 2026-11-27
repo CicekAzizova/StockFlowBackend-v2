@@ -139,3 +139,26 @@ describe('refund method', () => {
     expect(res.body.revenue).toBe(60);
   });
 });
+
+describe('returned filter', () => {
+  it('keeps only refunded or only untouched sales', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50 });
+    const refunded = await http.post('/sales', { product_id: p.id, quantity: 2 }, owner.token);
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+    await http.post(
+      `/sales/${refunded.body.saleId}/returns`,
+      { items: [{ sale_item_id: refunded.body.sale.items[0].id, quantity: 1 }] },
+      owner.token,
+    );
+
+    const onlyReturned = await http.get('/sales?returned=true', owner.token);
+    expect(onlyReturned.body.items.map((s: { id: number }) => s.id)).toEqual([
+      refunded.body.saleId,
+    ]);
+
+    const untouched = await http.get('/sales?returned=false', owner.token);
+    expect(untouched.body.items).toHaveLength(1);
+    expect(untouched.body.items[0].id).not.toBe(refunded.body.saleId);
+  });
+});
