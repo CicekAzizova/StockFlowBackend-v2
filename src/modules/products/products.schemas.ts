@@ -70,10 +70,28 @@ export const productBody = z.object({
 
 export type ProductBody = z.infer<typeof productBody>;
 
+export const PRODUCT_SORTS = [
+  'newest',
+  'name',
+  'price_asc',
+  'price_desc',
+  'stock_asc',
+  'stock_desc',
+  'best_selling',
+] as const;
+
 export const productListQuery = paginationQuery.extend({
   q: z.string().trim().max(100).optional().describe('Search in name and SKU'),
   category: z.string().trim().max(80).optional().describe('Exact category name'),
   stock: z.enum(['in', 'low', 'out']).optional().describe('Filter by stock status'),
+  subcategory: z
+    .string()
+    .trim()
+    .max(80)
+    .optional()
+    .describe('Catalog code, e.g. "food.dairy". A main code like "food" keeps its subcategories'),
+  for_sale: z.stringbool().optional().describe('Only products that are (not) for sale'),
+  sort: z.enum(PRODUCT_SORTS).default('newest').describe('Order of the list'),
 });
 
 export const lowStockQuery = paginationQuery;

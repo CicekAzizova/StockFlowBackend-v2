@@ -28,7 +28,10 @@ export const productRoutes: FastifyPluginAsyncZod = async (app) => {
     {
       schema: {
         tags: ['Products'],
-        summary: 'List products of the current store (paginated, newest first)',
+        summary: 'List products of the current store (paginated)',
+        description:
+          'Filters: `q`, `category`, `subcategory`, `stock`, `for_sale`. `sort` orders the list ' +
+          '(newest, name, price_asc, price_desc, stock_asc, stock_desc, best_selling).',
         security: secured,
         querystring: productListQuery,
         response: { 200: paginatedResponse(productDto) },

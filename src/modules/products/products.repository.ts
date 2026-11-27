@@ -1,5 +1,6 @@
 import { buildSetClause, execute, queryMany, queryOne, type Queryable } from '../../db/pool.js';
 import { escapeLike } from '../../shared/formatting.js';
+import type { PRODUCT_SORTS } from './products.schemas.js';
 
 export interface ProductStockRow {
   location_id: number;
@@ -36,15 +37,31 @@ export interface ProductRow {
   updated_at: Date;
 }
 
+export type ProductSort = (typeof PRODUCT_SORTS)[number];
+
 export interface ProductFilters {
   q?: string | undefined;
   category?: string | undefined;
   stock?: 'in' | 'low' | 'out' | undefined;
+  subcategory?: string | undefined;
+  for_sale?: boolean | undefined;
+  sort?: ProductSort | undefined;
   /** true: seçilmiş məkandakı qalıq <= low_stock_limit (0 da daxildir) */
   lowStockOnly?: boolean;
 }
 
 const QTY = 'COALESCE(ps.quantity, 0)';
+
+/** Sıralama variantları. Hər biri sabit mətndir: istifadəçi girişi SQL-ə düşmür. */
+const ORDER_BY: Record<ProductSort, string> = {
+  newest: 'p.id DESC',
+  name: 'lower(p.name) ASC, p.id DESC',
+  price_asc: 'p.price ASC, p.id DESC',
+  price_desc: 'p.price DESC, p.id DESC',
+  stock_asc: `${QTY} ASC, p.id DESC`,
+  stock_desc: `${QTY} DESC, p.id DESC`,
+  best_selling: 'sold_this_month DESC, p.id DESC',
+};
 
 /** locParam: seçilmiş məkanın ID-si üçün SQL parametri (məs. "$3"). */
 const select = (locParam: string) => `
@@ -87,6 +104,13 @@ function buildWhere(storeId: number, locationId: number, filters: ProductFilters
   if (filters.stock === 'low') conditions.push(`${QTY} > 0 AND ${QTY} <= p.low_stock_limit`);
   if (filters.stock === 'in') conditions.push(`${QTY} > p.low_stock_limit`);
   if (filters.lowStockOnly) conditions.push(`${QTY} <= p.low_stock_limit`);
+  if (filters.for_sale !== undefined) conditions.push(`p.for_sale = ${bind(filters.for_sale)}`);
+  if (filters.subcategory) {
+    // "food" kimi əsas kod bütün alt kateqoriyaları ("food.dairy") tutur.
+    conditions.push(
+      `(p.subcategory = ${bind(filters.subcategory)} OR p.subcategory LIKE ${bind(`${filters.subcategory}.%`)})`,
+    );
+  }
 
   return { where: conditions.join(' AND '), params };
 }
@@ -99,7 +123,7 @@ export async function listProducts(
   page: { limit: number; offset: number },
 ): Promise<{ rows: ProductRow[]; total: number }> {
   const { where, params } = buildWhere(storeId, locationId, filters);
-  const order = filters.lowStockOnly ? `${QTY} ASC, p.id DESC` : 'p.id DESC';
+  const order = filters.lowStockOnly ? `${QTY} ASC, p.id DESC` : ORDER_BY[filters.sort ?? 'newest'];
   const limitParam = `$${params.length + 1}`;
   const offsetParam = `$${params.length + 2}`;
 

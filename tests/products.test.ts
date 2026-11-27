@@ -311,3 +311,40 @@ describe('product for sale switch', () => {
     expect((await http.patch(`/products/${p.id}/for-sale`, {}, owner.token)).status).toBe(400);
   });
 });
+
+describe('product list filters and sorting', () => {
+  it('filters by for_sale and subcategory and sorts by name and price', async () => {
+    const owner = await registerOwner(ctx, { main_categories: ['food'] });
+    const cheap = await createProduct(ctx, owner, {
+      name: 'Zebra water',
+      price: 1,
+      quantity: 5,
+      subcategory: 'food.drinks',
+    });
+    const pricey = await createProduct(ctx, owner, {
+      name: 'Apple cheese',
+      price: 9,
+      quantity: 5,
+      subcategory: 'food.dairy',
+    });
+    await http.patch(`/products/${pricey.id}/for-sale`, { for_sale: false }, owner.token);
+
+    const onSale = await http.get('/products?for_sale=true', owner.token);
+    expect(onSale.body.items.map((p: { id: number }) => p.id)).toEqual([cheap.id]);
+
+    const food = await http.get('/products?subcategory=food', owner.token);
+    expect(food.body.items).toHaveLength(2);
+
+    const dairy = await http.get('/products?subcategory=food.dairy', owner.token);
+    expect(dairy.body.items.map((p: { id: number }) => p.id)).toEqual([pricey.id]);
+
+    const byName = await http.get('/products?sort=name', owner.token);
+    expect(byName.body.items.map((p: { name: string }) => p.name)).toEqual([
+      'Apple cheese',
+      'Zebra water',
+    ]);
+
+    const byPrice = await http.get('/products?sort=price_desc', owner.token);
+    expect(byPrice.body.items.map((p: { id: number }) => p.id)).toEqual([pricey.id, cheap.id]);
+  });
+});

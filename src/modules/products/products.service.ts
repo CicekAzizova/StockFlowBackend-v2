@@ -129,7 +129,14 @@ export function createProductsService(deps: AppDeps, log: FastifyBaseLogger) {
 
   return {
     list: (auth: AuthContext, header: Header, query: PaginationQuery & ProductFilters) =>
-      page(auth, header, query, { q: query.q, category: query.category, stock: query.stock }),
+      page(auth, header, query, {
+        q: query.q,
+        category: query.category,
+        stock: query.stock,
+        subcategory: query.subcategory,
+        for_sale: query.for_sale,
+        sort: query.sort,
+      }),
 
     lowStock: (auth: AuthContext, header: Header, query: PaginationQuery) =>
       page(auth, header, query, { lowStockOnly: true }),
