@@ -6,12 +6,13 @@ import { requireStoreId } from '../../shared/auth-helpers.js';
 import { resolveLocation } from '../../shared/location-context.js';
 import { discountedPrice, formatTimestamp, roundMoney } from '../../shared/formatting.js';
 import { offsetOf, toPage, type PaginationQuery } from '../../shared/schemas.js';
+import * as products from '../products/products.repository.js';
 import * as movements from '../products/stock-movements.repository.js';
 import * as locations from '../locations/locations.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as repo from './sales.repository.js';
 import type { PaymentMethod, SaleRow } from './sales.repository.js';
-import type { CreateSaleInput, SaleDto } from './sales.schemas.js';
+import type { CreateReturnInput, CreateSaleInput, SaleDto } from './sales.schemas.js';
 import type { Storage } from '../../infra/storage/storage.js';
 
 const DAY_MS = 86_400_000;
@@ -39,6 +40,8 @@ export type SalesService = ReturnType<typeof createSalesService>;
 export function toSaleDto(row: SaleRow, storage: Storage): SaleDto {
   const items = row.items.map((item) => ({
     ...item,
+    id: item.id ?? 0,
+    returned_quantity: item.returned_quantity ?? 0,
     product_image_url: item.product_image_url
       ? thumbnailUrlFor(storage, item.product_image_url)
       : null,
@@ -55,6 +58,7 @@ export function toSaleDto(row: SaleRow, storage: Storage): SaleDto {
     unit_price: first?.unit_price ?? 0,
     total_price: row.total_price,
     discount: row.discount_amount,
+    returned_amount: row.returned_amount,
     sold_by: row.sold_by,
     seller_name: row.seller_name,
     seller_avatar_url: row.seller_avatar_url
@@ -246,6 +250,104 @@ export function createSalesService(deps: AppDeps) {
         total,
         query,
       );
+    },
+
+    /** Qəbzin bir hissəsini və ya hamısını geri qaytarır. Yalnız sahib edə bilər. */
+    async createReturn(auth: AuthContext, saleId: number, input: CreateReturnInput) {
+      const storeId = requireStoreId(auth);
+      const sale = await repo.findSale(pool, storeId, saleId);
+      if (!sale) throw notFound('SALE_NOT_FOUND', 'Sale not found');
+
+      const result = await withTransaction(pool, async (tx) => {
+        const lines = await repo.saleItemsForReturn(tx, saleId);
+        const byId = new Map(lines.map((line) => [line.id, line]));
+
+        const planned = input.items.map((wanted) => {
+          const line = byId.get(wanted.sale_item_id);
+          if (!line) {
+            throw badRequest('SALE_ITEM_NOT_FOUND', 'This item is not part of the sale', {
+              sale_item_id: wanted.sale_item_id,
+            });
+          }
+          const left = line.quantity - line.returned_quantity;
+          if (wanted.quantity > left) {
+            throw badRequest('TOO_MANY_RETURNED', 'More than what is left on this line', {
+              sale_item_id: wanted.sale_item_id,
+              available: left,
+            });
+          }
+          // Son qalan ədədlərdə qalıq məbləğ verilir: qəpiklər itmir.
+          const remainingAmount = roundMoney(line.line_total - line.returned_amount);
+          const amount =
+            wanted.quantity === left
+              ? remainingAmount
+              : Math.min(
+                  remainingAmount,
+                  roundMoney((line.line_total / line.quantity) * wanted.quantity),
+                );
+          return { line, quantity: wanted.quantity, amount };
+        });
+
+        const total = roundMoney(planned.reduce((sum, item) => sum + item.amount, 0));
+        const created = await repo.insertReturn(tx, {
+          storeId,
+          saleId,
+          locationId: sale.location_id,
+          createdBy: auth.userId,
+          reason: input.reason,
+          restocked: input.restock,
+          totalAmount: total,
+          note: input.note,
+        });
+
+        for (const item of planned) {
+          await repo.insertReturnItem(tx, created.id, {
+            saleItemId: item.line.id,
+            productId: item.line.product_id,
+            quantity: item.quantity,
+            lineTotal: item.amount,
+          });
+          await repo.addReturnedToSaleItem(tx, item.line.id, item.quantity, item.amount);
+
+          if (!input.restock) continue;
+          const balance = await products.addQuantity(
+            tx,
+            item.line.product_id,
+            sale.location_id,
+            item.quantity,
+          );
+          await movements.recordMovement(tx, {
+            storeId,
+            productId: item.line.product_id,
+            locationId: sale.location_id,
+            type: 'return',
+            change: item.quantity,
+            balanceAfter: balance,
+            userId: auth.userId,
+            saleId,
+          });
+        }
+
+        await repo.addReturnedToSale(tx, saleId, total);
+
+        return {
+          id: created.id,
+          sale_id: saleId,
+          reason: input.reason,
+          restocked: input.restock,
+          total_amount: total,
+          created_at: formatTimestamp(created.created_at),
+          items: planned.map((item) => ({
+            sale_item_id: item.line.id,
+            product_id: item.line.product_id,
+            product_name: item.line.product_name,
+            quantity: item.quantity,
+            line_total: item.amount,
+          })),
+        };
+      });
+
+      return result;
     },
 
     async getById(auth: AuthContext, id: number): Promise<SaleDto> {

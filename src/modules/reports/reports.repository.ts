@@ -44,13 +44,16 @@ export function salesBuckets(
             FROM base, step, generate_series(0, $4::int - 1) AS g
           )
      SELECT to_char(series.bucket, CASE WHEN $3 = 'month' THEN 'YYYY-MM' ELSE 'YYYY-MM-DD' END) AS label,
-            COALESCE(SUM(si.line_total), 0) AS revenue,
+            COALESCE(SUM(si.line_total - si.returned_amount), 0) AS revenue,
             COALESCE(SUM(CASE WHEN si.unit_cost IS NOT NULL
-                              THEN si.line_total - si.unit_cost * si.quantity END), 0) AS profit,
-            COALESCE(SUM(CASE WHEN si.unit_cost IS NULL THEN si.line_total END), 0)
+                              THEN si.line_total - si.returned_amount
+                                   - si.unit_cost * (si.quantity - si.returned_quantity) END),
+                     0) AS profit,
+            COALESCE(SUM(CASE WHEN si.unit_cost IS NULL
+                              THEN si.line_total - si.returned_amount END), 0)
               AS unknown_cost_revenue,
             COUNT(DISTINCT s.id) AS orders,
-            COALESCE(SUM(si.quantity), 0) AS items_sold
+            COALESCE(SUM(si.quantity - si.returned_quantity), 0) AS items_sold
      FROM series
      LEFT JOIN sales s
        ON s.store_id = $1
@@ -102,9 +105,11 @@ export function salesByLocation(
           )
      SELECT l.id AS location_id,
             l.name,
-            COALESCE(SUM(si.line_total), 0) AS revenue,
+            COALESCE(SUM(si.line_total - si.returned_amount), 0) AS revenue,
             COALESCE(SUM(CASE WHEN si.unit_cost IS NOT NULL
-                              THEN si.line_total - si.unit_cost * si.quantity END), 0) AS profit,
+                              THEN si.line_total - si.returned_amount
+                                   - si.unit_cost * (si.quantity - si.returned_quantity) END),
+                     0) AS profit,
             COUNT(DISTINCT s.id) AS orders
      FROM locations l
      LEFT JOIN sales s
@@ -140,13 +145,16 @@ export function salesBucketsForYear(
          AS bucket
      )
      SELECT to_char(series.bucket, 'YYYY-MM') AS label,
-            COALESCE(SUM(si.line_total), 0) AS revenue,
+            COALESCE(SUM(si.line_total - si.returned_amount), 0) AS revenue,
             COALESCE(SUM(CASE WHEN si.unit_cost IS NOT NULL
-                              THEN si.line_total - si.unit_cost * si.quantity END), 0) AS profit,
-            COALESCE(SUM(CASE WHEN si.unit_cost IS NULL THEN si.line_total END), 0)
+                              THEN si.line_total - si.returned_amount
+                                   - si.unit_cost * (si.quantity - si.returned_quantity) END),
+                     0) AS profit,
+            COALESCE(SUM(CASE WHEN si.unit_cost IS NULL
+                              THEN si.line_total - si.returned_amount END), 0)
               AS unknown_cost_revenue,
             COUNT(DISTINCT s.id) AS orders,
-            COALESCE(SUM(si.quantity), 0) AS items_sold
+            COALESCE(SUM(si.quantity - si.returned_quantity), 0) AS items_sold
      FROM series
      LEFT JOIN sales s
        ON s.store_id = $1
@@ -194,9 +202,11 @@ export function salesByLocationForYear(
     db,
     `SELECT l.id AS location_id,
             l.name,
-            COALESCE(SUM(si.line_total), 0) AS revenue,
+            COALESCE(SUM(si.line_total - si.returned_amount), 0) AS revenue,
             COALESCE(SUM(CASE WHEN si.unit_cost IS NOT NULL
-                              THEN si.line_total - si.unit_cost * si.quantity END), 0) AS profit,
+                              THEN si.line_total - si.returned_amount
+                                   - si.unit_cost * (si.quantity - si.returned_quantity) END),
+                     0) AS profit,
             COUNT(DISTINCT s.id) AS orders
      FROM locations l
      LEFT JOIN sales s
