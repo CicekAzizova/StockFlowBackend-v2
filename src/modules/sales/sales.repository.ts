@@ -450,12 +450,26 @@ export function paymentsByMethod(
 ): Promise<SalePaymentRow[]> {
   return queryMany<SalePaymentRow>(
     db,
-    `SELECT p.method, SUM(p.amount) AS amount
-     FROM sale_payments p
-     JOIN sales s ON s.id = p.sale_id
-     WHERE ${RANGE}
-     GROUP BY p.method
-     ORDER BY amount DESC, p.method`,
+    `SELECT method, SUM(amount) AS amount FROM (
+       SELECT p.method, p.amount
+       FROM sale_payments p
+       JOIN sales s ON s.id = p.sale_id
+       WHERE ${RANGE}
+       UNION ALL
+       -- Qaytarılan pul kassadan çıxdığı gün çıxılır, satışın günü yox.
+       SELECT r.refund_method AS method, -r.total_amount AS amount
+       FROM sale_returns r
+       WHERE r.store_id = $1
+         AND r.created_at >= ($3::date::timestamp AT TIME ZONE $2)
+         AND r.created_at < (($4::date + 1)::timestamp AT TIME ZONE $2)
+         AND ($5::bigint IS NULL
+              OR EXISTS (SELECT 1 FROM sales s2 WHERE s2.id = r.sale_id AND s2.sold_by = $5))
+         AND ($6::bigint IS NULL OR r.location_id = $6)
+         AND ($7::text IS NULL OR r.refund_method = $7)
+     ) totals
+     GROUP BY method
+     HAVING SUM(amount) <> 0
+     ORDER BY amount DESC, method`,
     rangeParams(storeId, timezone, range, filters),
   );
 }
@@ -492,6 +506,7 @@ export async function insertReturn(
     locationId: number;
     createdBy: number;
     reason: string;
+    refundMethod: PaymentMethod;
     restocked: boolean;
     totalAmount: number;
     note: string | undefined;
@@ -499,15 +514,16 @@ export async function insertReturn(
 ): Promise<{ id: number; created_at: Date }> {
   const row = await queryOne<{ id: number; created_at: Date }>(
     tx,
-    `INSERT INTO sale_returns (store_id, sale_id, location_id, created_by, reason, restocked,
-                               total_amount, note)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`,
+    `INSERT INTO sale_returns (store_id, sale_id, location_id, created_by, reason, refund_method,
+                               restocked, total_amount, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, created_at`,
     [
       input.storeId,
       input.saleId,
       input.locationId,
       input.createdBy,
       input.reason,
+      input.refundMethod,
       input.restocked,
       input.totalAmount,
       input.note ?? null,
