@@ -413,17 +413,20 @@ export function createSalesService(deps: AppDeps) {
       const current = { from: query.from, to: query.to };
       const previous = { from: formatDay(fromMs - days * DAY_MS), to: formatDay(fromMs - DAY_MS) };
 
-      const [now, before, sellers, methods] = await Promise.all([
+      const [now, before, sellers, methods, units] = await Promise.all([
         repo.salesTotals(pool, storeId, timezone, current, filters),
         repo.salesTotals(pool, storeId, timezone, previous, filters),
         repo.salesBySeller(pool, storeId, timezone, current, filters),
         repo.paymentsByMethod(pool, storeId, timezone, current, filters),
+        repo.itemsSold(pool, storeId, timezone, current, filters),
       ]);
 
       return {
         from: query.from,
         to: query.to,
         ...withAverage(now),
+        items_sold: units,
+        returned: roundMoney(now.returned),
         previous: withAverage(before),
         by_seller: sellers.map((row) => ({
           seller_id: Number(row.seller_id),

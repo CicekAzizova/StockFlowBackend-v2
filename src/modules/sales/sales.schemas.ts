@@ -245,6 +245,8 @@ export const salesTotalsResponse = z.object({
   from: z.string(),
   to: z.string(),
   ...salesTotals,
+  items_sold: z.number().int().describe('Units sold, returns subtracted'),
+  returned: z.number().describe('How much was refunded in this period'),
   previous: z
     .object(salesTotals)
     .describe('The same totals for the period of equal length right before `from`'),

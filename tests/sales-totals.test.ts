@@ -121,3 +121,26 @@ describe('sales totals', () => {
     expect((await http.get(`/sales/totals?from=${day(1)}&to=${day(0)}`)).status).toBe(401);
   });
 });
+
+describe('end of day numbers', () => {
+  it('counts units sold and the refunded amount', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50 });
+
+    const sale = await http.post('/sales', { product_id: p.id, quantity: 4 }, owner.token);
+    await http.post('/sales', { product_id: p.id, quantity: 1 }, owner.token);
+    await http.post(
+      `/sales/${sale.body.saleId}/returns`,
+      { items: [{ sale_item_id: sale.body.sale.items[0].id, quantity: 1 }] },
+      owner.token,
+    );
+
+    const res = await http.get(`/sales/totals?from=${day(0)}&to=${day(0)}`, owner.token);
+    expect(res.body).toMatchObject({
+      revenue: 40, // 50 - 10
+      orders: 2,
+      items_sold: 4, // 5 satılıb, 1 qaytarılıb
+      returned: 10,
+    });
+  });
+});
