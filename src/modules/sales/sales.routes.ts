@@ -104,7 +104,8 @@ export const salesRoutes: FastifyPluginAsyncZod = async (app) => {
         tags: ['Sales'],
         summary: 'List sales (newest first). Owners see the store, associates only their own.',
         description:
-          'Filters: `from`, `to`, `seller_id` (owners), `location_id`, `payment_method`. ' +
+          'Filters: `from`, `to`, `seller_id` (owners), `location_id`, `payment_method`, ' +
+          '`returned`. ' +
           'A split payment matches every method it was paid with.',
         security: secured,
         querystring: salesListQuery,

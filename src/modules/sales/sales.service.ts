@@ -11,7 +11,7 @@ import * as movements from '../products/stock-movements.repository.js';
 import * as locations from '../locations/locations.repository.js';
 import * as stores from '../stores/stores.repository.js';
 import * as repo from './sales.repository.js';
-import type { PaymentMethod, SaleRow } from './sales.repository.js';
+import type { PaymentMethod, SalePaymentMethod, SaleRow } from './sales.repository.js';
 import type { CreateReturnInput, CreateSaleInput, SaleDto } from './sales.schemas.js';
 import type { Storage } from '../../infra/storage/storage.js';
 
@@ -224,7 +224,8 @@ export function createSalesService(deps: AppDeps) {
         from?: string | undefined;
         to?: string | undefined;
         location_id?: number | undefined;
-        payment_method?: PaymentMethod | undefined;
+        payment_method?: SalePaymentMethod | undefined;
+        returned?: boolean | undefined;
       },
     ) {
       const storeId = requireStoreId(auth);
@@ -242,6 +243,7 @@ export function createSalesService(deps: AppDeps) {
           to: query.to,
           locationId: query.location_id,
           paymentMethod: query.payment_method,
+          returned: query.returned,
         },
         { limit: query.limit, offset: offsetOf(query) },
       );

@@ -66,8 +66,10 @@ export interface SaleListFilters {
   from?: string | undefined;
   to?: string | undefined;
   locationId?: number | undefined;
-  /** Bu üsulla ödənilmiş satışlar (qarışıq ödənişin bir hissəsi olsa da sayılır). */
-  paymentMethod?: PaymentMethod | undefined;
+  /** Bu üsulla ödənilmiş satışlar. "mixed" yalnız bölünmüş ödənişləri saxlayır. */
+  paymentMethod?: SalePaymentMethod | undefined;
+  /** true: yalnız qaytarması olanlar, false: yalnız toxunulmamış satışlar. */
+  returned?: boolean | undefined;
 }
 
 /** Satışın ödənişlərindən birinin bu üsulla olduğunu yoxlayır. */
@@ -117,8 +119,13 @@ function buildWhere(storeId: number, timezone: string, filters: SaleListFilters)
   if (filters.locationId !== undefined) {
     conditions.push(`s.location_id = ${bind(filters.locationId)}`);
   }
-  if (filters.paymentMethod !== undefined) {
+  if (filters.paymentMethod === 'mixed') {
+    conditions.push(`s.payment_method = ${bind('mixed')}`);
+  } else if (filters.paymentMethod !== undefined) {
     conditions.push(paidWith(bind, filters.paymentMethod));
+  }
+  if (filters.returned !== undefined) {
+    conditions.push(filters.returned ? 's.returned_amount > 0' : 's.returned_amount = 0');
   }
   return { where: conditions.join(' AND '), params };
 }

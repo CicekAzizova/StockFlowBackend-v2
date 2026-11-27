@@ -93,9 +93,10 @@ export const salesListQuery = paginationQuery.extend({
     .positive({ error: 'location_id must be a positive integer' })
     .optional(),
   payment_method: z
-    .enum(PAYMENT_METHODS)
+    .enum(SALE_PAYMENT_METHODS)
     .optional()
-    .describe('Keeps sales paid with this method, split payments included'),
+    .describe('Keeps sales paid with this method; "mixed" keeps split payments only'),
+  returned: z.stringbool().optional().describe('Only sales that were (not) refunded'),
 });
 
 export const RETURN_REASONS = ['damaged', 'customer_declined', 'wrong_item', 'other'] as const;
