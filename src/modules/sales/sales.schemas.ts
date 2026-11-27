@@ -266,6 +266,13 @@ export const salesTotalsResponse = z.object({
     )
     .describe('Revenue per seller, biggest first. Associates only see themselves.'),
   by_payment: z
-    .array(z.object({ method: z.enum(PAYMENT_METHODS), amount: z.number() }))
-    .describe('Money received per payment method, biggest first'),
+    .array(
+      z.object({
+        method: z.enum(PAYMENT_METHODS),
+        received: z.number().describe('Taken in from sales'),
+        refunded: z.number().describe('Given back by returns'),
+        amount: z.number().describe('received - refunded'),
+      }),
+    )
+    .describe('Money per payment method, biggest first'),
 });
