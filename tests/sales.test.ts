@@ -459,8 +459,8 @@ describe('split payments', () => {
     const res = await http.get(`/sales/totals?from=${day(0)}&to=${day(0)}`, owner.token);
     // Məbləğlər bərabərdir, ona görə ad üzrə əlifba sırası.
     expect(res.body.by_payment).toEqual([
-      { method: 'card', amount: 30 },
-      { method: 'cash', amount: 30 },
+      { method: 'card', received: 30, refunded: 0, amount: 30 },
+      { method: 'cash', received: 30, refunded: 0, amount: 30 },
     ]);
   });
 });

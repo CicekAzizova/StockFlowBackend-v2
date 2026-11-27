@@ -133,8 +133,8 @@ describe('refund method', () => {
     const res = await http.get(`/sales/totals?from=${today()}&to=${today()}`, owner.token);
     // Məbləğlər bərabərdir, ona görə ad üzrə əlifba sırası.
     expect(res.body.by_payment).toEqual([
-      { method: 'card', amount: 30 },
-      { method: 'cash', amount: 30 }, // 50 - 20
+      { method: 'card', received: 30, refunded: 0, amount: 30 },
+      { method: 'cash', received: 50, refunded: 20, amount: 30 },
     ]);
     expect(res.body.revenue).toBe(60);
   });

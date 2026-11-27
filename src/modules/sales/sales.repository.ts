@@ -9,6 +9,25 @@ export interface SalePaymentRow {
   amount: number;
 }
 
+/** Bir ödəniş üsulu üzrə gün yekunu: nə qədər gəlib, nə qədər qaytarılıb. */
+export interface PaymentTotalRow {
+  method: PaymentMethod;
+  received: number;
+  refunded: number;
+  amount: number;
+}
+
+/** Bir ödəniş üsulu üzrə gün sonu bölgüsü. */
+export interface PaymentTotalsRow {
+  method: PaymentMethod;
+  /** Satışlardan daxil olan. */
+  received: number;
+  /** Qaytarmalarla geri verilən. */
+  refunded: number;
+  /** received - refunded. */
+  amount: number;
+}
+
 export interface SaleItemRow {
   id?: number;
   product_id: number;
@@ -447,17 +466,21 @@ export function paymentsByMethod(
   timezone: string,
   range: { from: string; to: string },
   filters: TotalsFilters,
-): Promise<SalePaymentRow[]> {
-  return queryMany<SalePaymentRow>(
+): Promise<PaymentTotalsRow[]> {
+  return queryMany<PaymentTotalsRow>(
     db,
-    `SELECT method, SUM(amount) AS amount FROM (
-       SELECT p.method, p.amount
+    `SELECT method,
+            SUM(received) AS received,
+            SUM(refunded) AS refunded,
+            SUM(received) - SUM(refunded) AS amount
+     FROM (
+       SELECT p.method, p.amount AS received, 0 AS refunded
        FROM sale_payments p
        JOIN sales s ON s.id = p.sale_id
        WHERE ${RANGE}
        UNION ALL
        -- Qaytarılan pul kassadan çıxdığı gün çıxılır, satışın günü yox.
-       SELECT r.refund_method AS method, -r.total_amount AS amount
+       SELECT r.refund_method AS method, 0 AS received, r.total_amount AS refunded
        FROM sale_returns r
        WHERE r.store_id = $1
          AND r.created_at >= ($3::date::timestamp AT TIME ZONE $2)
@@ -468,7 +491,7 @@ export function paymentsByMethod(
          AND ($7::text IS NULL OR r.refund_method = $7)
      ) totals
      GROUP BY method
-     HAVING SUM(amount) <> 0
+     HAVING SUM(received) <> 0 OR SUM(refunded) <> 0
      ORDER BY amount DESC, method`,
     rangeParams(storeId, timezone, range, filters),
   );

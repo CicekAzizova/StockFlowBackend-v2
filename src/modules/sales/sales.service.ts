@@ -436,7 +436,12 @@ export function createSalesService(deps: AppDeps) {
           revenue: roundMoney(row.revenue),
           orders: row.orders,
         })),
-        by_payment: methods.map((row) => ({ method: row.method, amount: roundMoney(row.amount) })),
+        by_payment: methods.map((row) => ({
+          method: row.method,
+          received: roundMoney(row.received),
+          refunded: roundMoney(row.refunded),
+          amount: roundMoney(row.amount),
+        })),
       };
     },
 
