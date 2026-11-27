@@ -1,4 +1,4 @@
-import { queryMany, queryOne, type Queryable } from '../../db/pool.js';
+import { execute, queryMany, queryOne, type Queryable } from '../../db/pool.js';
 import type { PAYMENT_METHODS, SALE_PAYMENT_METHODS } from './sales.schemas.js';
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
@@ -10,12 +10,14 @@ export interface SalePaymentRow {
 }
 
 export interface SaleItemRow {
+  id?: number;
   product_id: number;
   product_name: string;
   sku: string;
   quantity: number;
   unit_price: number;
   line_total: number;
+  returned_quantity?: number;
   /** Satış anındakı alış qiyməti (bir vahid), məlum deyilsə null. */
   unit_cost?: number | null;
   /** Yalnız oxuma zamanı doldurulur: məhsulun ilk şəkli (məhsul silinibsə null). */
@@ -27,6 +29,7 @@ export interface SaleRow {
   receipt_no: number;
   total_price: number;
   discount_amount: number;
+  returned_amount: number;
   payment_method: SalePaymentMethod;
   payments: SalePaymentRow[];
   sold_by: number;
@@ -54,7 +57,7 @@ function paidWith(bind: (value: unknown) => string, method: PaymentMethod): stri
 }
 
 const SELECT = `
-  SELECT s.id, s.receipt_no, s.total_price, s.discount_amount, s.payment_method, s.sold_by, s.created_at,
+  SELECT s.id, s.receipt_no, s.total_price, s.discount_amount, s.returned_amount, s.payment_method, s.sold_by, s.created_at,
          trim(u.name || ' ' || u.surname) AS seller_name,
          u.avatar_url AS seller_avatar_url,
          s.location_id, l.name AS location_name,
@@ -65,7 +68,8 @@ const SELECT = `
          COALESCE((
            SELECT json_agg(json_build_object(
                     'product_id', i.product_id, 'product_name', i.product_name, 'sku', i.sku,
-                    'quantity', i.quantity, 'unit_price', i.unit_price, 'line_total', i.line_total,
+                    'id', i.id, 'quantity', i.quantity, 'unit_price', i.unit_price,
+                    'line_total', i.line_total, 'returned_quantity', i.returned_quantity,
                     'product_image_url', (SELECT p.image_urls[1] FROM products p WHERE p.id = i.product_id)
                   ) ORDER BY i.id)
            FROM sale_items i WHERE i.sale_id = s.id
@@ -277,9 +281,10 @@ export async function monthSummary(
               (date_trunc('day', now() AT TIME ZONE $2) AT TIME ZONE $2) AS day_start
      )
      SELECT
-       COALESCE(SUM(s.total_price) FILTER (WHERE s.created_at >= b.day_start), 0) AS today_sales,
+       COALESCE(SUM(s.total_price - s.returned_amount)
+         FILTER (WHERE s.created_at >= b.day_start), 0) AS today_sales,
        COUNT(s.id) FILTER (WHERE s.created_at >= b.day_start) AS today_orders,
-       COALESCE(SUM(s.total_price), 0) AS total_sales,
+       COALESCE(SUM(s.total_price - s.returned_amount), 0) AS total_sales,
        COUNT(s.id) AS total_orders
      FROM bounds b
      LEFT JOIN sales s
@@ -329,7 +334,7 @@ export function dailySales(
             FROM today t, generate_series(0, $3::int - 1) AS g
           )
      SELECT to_char(series.day, 'YYYY-MM-DD') AS date,
-            COALESCE(SUM(s.total_price), 0) AS total,
+            COALESCE(SUM(s.total_price - s.returned_amount), 0) AS total,
             COUNT(s.id) AS orders
      FROM series
      LEFT JOIN sales s
@@ -402,7 +407,7 @@ export async function salesTotals(
 ): Promise<TotalsRow> {
   const row = await queryOne<TotalsRow>(
     db,
-    `SELECT COALESCE(SUM(s.total_price), 0) AS revenue, COUNT(s.id) AS orders
+    `SELECT COALESCE(SUM(s.total_price - s.returned_amount), 0) AS revenue, COUNT(s.id) AS orders
      FROM sales s WHERE ${RANGE}`,
     rangeParams(storeId, timezone, range, filters),
   );
@@ -421,7 +426,7 @@ export function salesBySeller(
     db,
     `SELECT s.sold_by AS seller_id,
             trim(u.name || ' ' || u.surname) AS seller_name,
-            SUM(s.total_price) AS revenue,
+            SUM(s.total_price - s.returned_amount) AS revenue,
             COUNT(s.id) AS orders
      FROM sales s
      JOIN users u ON u.id = s.sold_by
@@ -450,4 +455,101 @@ export function paymentsByMethod(
      ORDER BY amount DESC, p.method`,
     rangeParams(storeId, timezone, range, filters),
   );
+}
+
+// =====================================================================
+// Qaytarmalar
+// =====================================================================
+
+export interface SaleItemForReturn {
+  id: number;
+  product_id: number;
+  product_name: string;
+  quantity: number;
+  line_total: number;
+  returned_quantity: number;
+  returned_amount: number;
+}
+
+/** Qəbzin sətirləri, artıq qaytarılmış miqdarla birlikdə (qaytarma üçün kilidlənir). */
+export function saleItemsForReturn(tx: Queryable, saleId: number): Promise<SaleItemForReturn[]> {
+  return queryMany<SaleItemForReturn>(
+    tx,
+    `SELECT id, product_id, product_name, quantity, line_total, returned_quantity, returned_amount
+     FROM sale_items WHERE sale_id = $1 ORDER BY id FOR UPDATE`,
+    [saleId],
+  );
+}
+
+export async function insertReturn(
+  tx: Queryable,
+  input: {
+    storeId: number;
+    saleId: number;
+    locationId: number;
+    createdBy: number;
+    reason: string;
+    restocked: boolean;
+    totalAmount: number;
+    note: string | undefined;
+  },
+): Promise<{ id: number; created_at: Date }> {
+  const row = await queryOne<{ id: number; created_at: Date }>(
+    tx,
+    `INSERT INTO sale_returns (store_id, sale_id, location_id, created_by, reason, restocked,
+                               total_amount, note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, created_at`,
+    [
+      input.storeId,
+      input.saleId,
+      input.locationId,
+      input.createdBy,
+      input.reason,
+      input.restocked,
+      input.totalAmount,
+      input.note ?? null,
+    ],
+  );
+  if (!row) throw new Error('Failed to insert return');
+  return row;
+}
+
+export async function insertReturnItem(
+  tx: Queryable,
+  returnId: number,
+  item: { saleItemId: number; productId: number; quantity: number; lineTotal: number },
+): Promise<void> {
+  await execute(
+    tx,
+    `INSERT INTO sale_return_items (return_id, sale_item_id, product_id, quantity, line_total)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [returnId, item.saleItemId, item.productId, item.quantity, item.lineTotal],
+  );
+}
+
+/** Sətrin və satışın qaytarılmış cəmlərini artırır: hesabatlar bunlardan oxuyur. */
+export async function addReturnedToSaleItem(
+  tx: Queryable,
+  saleItemId: number,
+  quantity: number,
+  amount: number,
+): Promise<void> {
+  await execute(
+    tx,
+    `UPDATE sale_items
+     SET returned_quantity = returned_quantity + $2, returned_amount = returned_amount + $3
+     WHERE id = $1`,
+    [saleItemId, quantity, amount],
+  );
+}
+
+export async function addReturnedToSale(
+  tx: Queryable,
+  saleId: number,
+  amount: number,
+): Promise<void> {
+  await execute(tx, 'UPDATE sales SET returned_amount = returned_amount + $2 WHERE id = $1', [
+    saleId,
+    amount,
+  ]);
 }

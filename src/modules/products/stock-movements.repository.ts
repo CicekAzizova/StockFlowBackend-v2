@@ -1,7 +1,7 @@
 import { execute, queryMany, queryOne, type Queryable } from '../../db/pool.js';
 
 export type MovementType =
-  'initial' | 'sale' | 'restock' | 'transfer_in' | 'transfer_out' | 'adjustment';
+  'initial' | 'sale' | 'restock' | 'transfer_in' | 'transfer_out' | 'adjustment' | 'return';
 
 export interface MovementInput {
   storeId: number;

@@ -2,11 +2,13 @@ import { locationHeader } from '../../shared/location-context.js';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { idParams, paginatedResponse } from '../../shared/schemas.js';
 import {
+  createReturnBody,
   createSaleBody,
   createSaleResponse,
   dailySalesQuery,
   dailySalesResponse,
   saleDto,
+  saleReturnDto,
   salesListQuery,
   salesSummaryResponse,
   salesTotalsQuery,
@@ -110,6 +112,29 @@ export const salesRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => service.list(request.auth, request.query),
+  );
+
+  app.post(
+    '/:id/returns',
+    {
+      onRequest: [app.requireRole('OWNER')],
+      schema: {
+        tags: ['Sales'],
+        summary: 'Return part or all of a sale (owner only)',
+        description:
+          'Each line can be returned once in full across several returns. The refunded amount ' +
+          'is subtracted from revenue and profit. With `restock` the goods go back to the ' +
+          "location's stock and appear in the product history as a return.",
+        security: secured,
+        params: idParams,
+        body: createReturnBody,
+        response: { 201: saleReturnDto },
+      },
+    },
+    async (request, reply) => {
+      const created = await service.createReturn(request.auth, request.params.id, request.body);
+      return reply.code(201).send(created);
+    },
   );
 
   app.get(

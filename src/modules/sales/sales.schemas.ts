@@ -98,13 +98,53 @@ export const salesListQuery = paginationQuery.extend({
     .describe('Keeps sales paid with this method, split payments included'),
 });
 
+export const RETURN_REASONS = ['damaged', 'customer_declined', 'wrong_item', 'other'] as const;
+
+export const createReturnBody = z.object({
+  items: z
+    .array(z.object({ sale_item_id: positiveInt, quantity: positiveInt }))
+    .min(1, 'At least one item is required')
+    .max(100, 'At most 100 items per return')
+    .refine((list) => new Set(list.map((i) => i.sale_item_id)).size === list.length, {
+      message: 'Each sale item can appear only once',
+    }),
+  reason: z.enum(RETURN_REASONS).default('other'),
+  restock: z
+    .boolean()
+    .default(true)
+    .describe('Put the goods back on the shelf. Off for damaged goods.'),
+  note: z.string().trim().max(500).optional(),
+});
+
+export type CreateReturnInput = z.output<typeof createReturnBody>;
+
+export const saleReturnDto = z.object({
+  id: z.number().int(),
+  sale_id: z.number().int(),
+  reason: z.enum(RETURN_REASONS),
+  restocked: z.boolean(),
+  total_amount: z.number(),
+  created_at: z.string().describe('UTC, format yyyy-MM-dd HH:mm:ss'),
+  items: z.array(
+    z.object({
+      sale_item_id: z.number().int(),
+      product_id: z.number().int(),
+      product_name: z.string(),
+      quantity: z.number().int(),
+      line_total: z.number(),
+    }),
+  ),
+});
+
 export const saleItemDto = z.object({
+  id: z.number().int(),
   product_id: z.number().int(),
   product_name: z.string(),
   sku: z.string(),
   quantity: z.number().int(),
   unit_price: z.number(),
   line_total: z.number(),
+  returned_quantity: z.number().int().describe('How many of this line were returned'),
   product_image_url: z.string().nullable().describe('Small version of the first product photo'),
 });
 
@@ -123,6 +163,7 @@ export const saleDto = z.object({
   unit_price: z.number(),
   total_price: z.number().describe('Final amount after the cashier discount'),
   discount: z.number().describe('Cashier discount amount (0 when none)'),
+  returned_amount: z.number().describe('How much of this sale was refunded (0 when none)'),
   sold_by: z.number().int(),
   seller_name: z.string(),
   seller_avatar_url: z.string().nullable(),

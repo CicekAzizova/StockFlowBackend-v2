@@ -160,6 +160,7 @@ export const MOVEMENT_TYPES = [
   'transfer_in',
   'transfer_out',
   'adjustment',
+  'return',
 ] as const;
 
 export const historyQuery = paginationQuery.extend({
