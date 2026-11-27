@@ -505,6 +505,10 @@ describe('sales list filters', () => {
     const byCard = await http.get('/sales?payment_method=card', owner.token);
     expect(byCard.body.items).toHaveLength(2); // kart + qarışıq
 
+    const onlyMixed = await http.get('/sales?payment_method=mixed', owner.token);
+    expect(onlyMixed.body.items).toHaveLength(1);
+    expect(onlyMixed.body.items[0].payment_method).toBe('mixed');
+
     const cashAtMain = await http.get(
       `/sales?payment_method=cash&location_id=${main.id}`,
       owner.token,
