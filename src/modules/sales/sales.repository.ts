@@ -377,6 +377,7 @@ function rangeParams(
 export interface TotalsRow {
   revenue: number;
   orders: number;
+  returned: number;
 }
 
 export interface SellerTotalsRow {
@@ -407,11 +408,13 @@ export async function salesTotals(
 ): Promise<TotalsRow> {
   const row = await queryOne<TotalsRow>(
     db,
-    `SELECT COALESCE(SUM(s.total_price - s.returned_amount), 0) AS revenue, COUNT(s.id) AS orders
+    `SELECT COALESCE(SUM(s.total_price - s.returned_amount), 0) AS revenue,
+            COUNT(s.id) AS orders,
+            COALESCE(SUM(s.returned_amount), 0) AS returned
      FROM sales s WHERE ${RANGE}`,
     rangeParams(storeId, timezone, range, filters),
   );
-  return row ?? { revenue: 0, orders: 0 };
+  return row ?? { revenue: 0, orders: 0, returned: 0 };
 }
 
 /** Verilmiş tarix aralığı üçün satıcılar üzrə cəm, ən çox gəlirli birinci. */
@@ -552,4 +555,23 @@ export async function addReturnedToSale(
     saleId,
     amount,
   ]);
+}
+
+/** Verilmiş aralıqda satılan ədəd sayı (qaytarılanlar çıxılmaqla). */
+export async function itemsSold(
+  db: Queryable,
+  storeId: number,
+  timezone: string,
+  range: { from: string; to: string },
+  filters: TotalsFilters,
+): Promise<number> {
+  const row = await queryOne<{ items_sold: number }>(
+    db,
+    `SELECT COALESCE(SUM(si.quantity - si.returned_quantity), 0) AS items_sold
+     FROM sale_items si
+     JOIN sales s ON s.id = si.sale_id
+     WHERE ${RANGE}`,
+    rangeParams(storeId, timezone, range, filters),
+  );
+  return row?.items_sold ?? 0;
 }
