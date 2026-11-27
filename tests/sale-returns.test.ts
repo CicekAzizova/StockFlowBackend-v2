@@ -107,3 +107,35 @@ describe('sale returns', () => {
     expect(bySeller.status).toBe(403);
   });
 });
+
+describe('refund method', () => {
+  it('takes the refund out of the chosen method in the totals', async () => {
+    const owner = await registerOwner(ctx);
+    const p = await createProduct(ctx, owner, { price: 10, quantity: 50 });
+
+    // 50 nağd, 30 kart
+    const cashSale = await http.post('/sales', { product_id: p.id, quantity: 5 }, owner.token);
+    await http.post(
+      '/sales',
+      { items: [{ product_id: p.id, quantity: 3 }], payment_method: 'card' },
+      owner.token,
+    );
+
+    await http.post(
+      `/sales/${cashSale.body.saleId}/returns`,
+      {
+        items: [{ sale_item_id: cashSale.body.sale.items[0].id, quantity: 2 }],
+        refund_method: 'cash',
+      },
+      owner.token,
+    );
+
+    const res = await http.get(`/sales/totals?from=${today()}&to=${today()}`, owner.token);
+    // Məbləğlər bərabərdir, ona görə ad üzrə əlifba sırası.
+    expect(res.body.by_payment).toEqual([
+      { method: 'card', amount: 30 },
+      { method: 'cash', amount: 30 }, // 50 - 20
+    ]);
+    expect(res.body.revenue).toBe(60);
+  });
+});

@@ -109,6 +109,10 @@ export const createReturnBody = z.object({
       message: 'Each sale item can appear only once',
     }),
   reason: z.enum(RETURN_REASONS).default('other'),
+  refund_method: z
+    .enum(PAYMENT_METHODS)
+    .default('cash')
+    .describe('How the money was given back. Keeps the cash drawer total correct.'),
   restock: z
     .boolean()
     .default(true)
@@ -122,6 +126,7 @@ export const saleReturnDto = z.object({
   id: z.number().int(),
   sale_id: z.number().int(),
   reason: z.enum(RETURN_REASONS),
+  refund_method: z.enum(PAYMENT_METHODS),
   restocked: z.boolean(),
   total_amount: z.number(),
   created_at: z.string().describe('UTC, format yyyy-MM-dd HH:mm:ss'),
